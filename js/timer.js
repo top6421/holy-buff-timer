@@ -9,10 +9,12 @@ const Timer = (function () {
         CONSECUTIVE_MISS_RESCAN: 10,
         ALERT_THRESHOLD_SECONDS: 5,
         BUFF_DURATION_SECONDS: 120,
-        REFRESH_SCORE_DELTA: 0.2,
+        REFRESH_SCORE_DELTA: 0.12,         // 스파이크 민감도 (기존 0.20 → 0.12)
         REFRESH_COOLDOWN_MS: 5000,
         OCR_ACTIVE_BELOW_SEC: 60,
         SCORE_BUFFER_SIZE: 3,
+        OCR_REFRESH_JUMP_MIN: 10,          // OCR이 시계 추정보다 +10초 이상 크면 갱신으로 판정
+        OCR_MIN_CONFIDENCE: 65,
     };
 
     const listeners = {
@@ -153,23 +155,39 @@ const Timer = (function () {
             const n = res.number;
             const conf = res.confidence || 0;
 
-            // 허용 범위: 1~59 (60초 이하 구간에서만 숫자 표시됨)
             if (n < 1 || n > 59) return;
-            // 신뢰도 낮으면 무시 (Tesseract 기준 ~65 이상만)
-            if (conf < 65) return;
-            // 내부 시계와 크게 벗어나면 오인식으로 간주
-            // 시계 기반 추정값 ±3초 이내 + 시계보다 미래(큰 값) 아님
+            if (conf < CONFIG.OCR_MIN_CONFIDENCE) return;
+
             const clockEst = remainingSec;
             const diff = n - clockEst;
-            if (diff > 1 || diff < -4) return;  // 미래로 점프 거의 금지, 과거로도 4초 초과 금지
-            // 단조 감소 강제: 이전 값보다 크면(과거로 돌아감) 거부
-            if (n > Math.ceil(clockEst) + 1) return;
+
+            // 큰 양의 점프(+10초 이상)는 갱신(재시전) 증거로 간주 → 갱신 처리
+            if (diff >= CONFIG.OCR_REFRESH_JUMP_MIN) {
+                if (Date.now() - lastRefreshAt >= CONFIG.REFRESH_COOLDOWN_MS) {
+                    handleRefresh();
+                    // 갱신 직후 실제 잔여 n초로 재보정
+                    remainingSec = n;
+                    startTime = Date.now() - (CONFIG.BUFF_DURATION_SECONDS - n) * 1000;
+                }
+                return;
+            }
+
+            // 일반 보정: ±(−4,+1) 범위만 허용 (작은 오차 교정)
+            if (diff > 1 || diff < -4) return;
 
             remainingSec = n;
             startTime = Date.now() - (CONFIG.BUFF_DURATION_SECONDS - n) * 1000;
         } catch (_) {
             // OCR 실패는 무시
         }
+    }
+
+    // 사용자가 직접 갱신 버튼 눌렀을 때
+    function manualRefresh() {
+        if (state !== 'TRACKING' && state !== 'ALERTING') return false;
+        handleRefresh();
+        transition('TRACKING');
+        return true;
     }
 
     function updateRemainingFromClock() {
@@ -328,7 +346,7 @@ const Timer = (function () {
         return { ...CONFIG };
     }
 
-    return { on, start, stop, getStatus, rescan, setAlertThreshold, getConfig };
+    return { on, start, stop, getStatus, rescan, setAlertThreshold, getConfig, manualRefresh };
 })();
 
 if (typeof window !== 'undefined') window.Timer = Timer;

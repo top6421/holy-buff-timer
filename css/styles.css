@@ -280,6 +280,11 @@ details.panel[open] > summary::before {
     color: #1e293b;
 }
 
+.btn-warning {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+}
+
 .preview-wrapper video, .playback-wrapper video {
     width: 100%;
     height: 100%;

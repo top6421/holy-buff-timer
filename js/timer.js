@@ -9,11 +9,15 @@ const Timer = (function () {
         CONSECUTIVE_MISS_RESCAN: 10,
         ALERT_THRESHOLD_SECONDS: 5,
         BUFF_DURATION_SECONDS: 120,
-        REFRESH_SCORE_DELTA: 0.12,         // 스파이크 민감도 (기존 0.20 → 0.12)
+        REFRESH_SCORE_DELTA: 0.10,         // 점수 스파이크 임계
+        REFRESH_BRIGHTNESS_DELTA: 15,      // 밝기(0~255) 스파이크 임계
+        REFRESH_BRIGHTNESS_RATIO: 0.85,    // 현재 밝기가 초기 밝기의 85% 이상이면 '깨끗한 상태' 판정
+        REFRESH_MIN_ELAPSED_SEC: 10,       // 감지 후 최소 이 시간 지나야 갱신 판정(오발동 방지)
         REFRESH_COOLDOWN_MS: 5000,
         OCR_ACTIVE_BELOW_SEC: 60,
         SCORE_BUFFER_SIZE: 3,
-        OCR_REFRESH_JUMP_MIN: 10,          // OCR이 시계 추정보다 +10초 이상 크면 갱신으로 판정
+        BRIGHTNESS_BUFFER_SIZE: 3,
+        OCR_REFRESH_JUMP_MIN: 10,
         OCR_MIN_CONFIDENCE: 65,
     };
 
@@ -45,6 +49,9 @@ const Timer = (function () {
     let lastRefreshAt = 0;
     let alertedThisCycle = false; // 같은 사이클 중복 알림 방지
     let recentScores = [];
+    let recentBrightness = [];
+    let initialBrightness = 0;
+    let lastBrightness = 0;
 
     function on(event, callback) {
         if (!(event in listeners)) return;
@@ -83,6 +90,9 @@ const Timer = (function () {
         lastRefreshAt = 0;
         alertedThisCycle = false;
         recentScores = [];
+        recentBrightness = [];
+        initialBrightness = 0;
+        lastBrightness = 0;
     }
 
     function modulesReady() {
@@ -102,27 +112,53 @@ const Timer = (function () {
         if (recentScores.length > CONFIG.SCORE_BUFFER_SIZE) recentScores.shift();
     }
 
-    function avgRecentScore() {
-        if (recentScores.length === 0) return 0;
+    function pushBrightness(b) {
+        recentBrightness.push(b);
+        if (recentBrightness.length > CONFIG.BRIGHTNESS_BUFFER_SIZE) recentBrightness.shift();
+    }
+
+    function avgOf(arr) {
+        if (!arr.length) return 0;
         let s = 0;
-        for (const v of recentScores) s += v;
-        return s / recentScores.length;
+        for (const v of arr) s += v;
+        return s / arr.length;
     }
 
-    // 갱신 감지: 직전 N틱 평균 대비 +REFRESH_SCORE_DELTA 이상 스파이크
-    function detectRefreshSpike(currentScore) {
-        if (recentScores.length < CONFIG.SCORE_BUFFER_SIZE) return false;
-        if (Date.now() - lastRefreshAt < CONFIG.REFRESH_COOLDOWN_MS) return false;
-        const avg = avgRecentScore();
-        return (currentScore - avg) >= CONFIG.REFRESH_SCORE_DELTA;
+    // 갱신 감지 (3가지 지표):
+    // 1) 점수 스파이크  2) 밝기 스파이크  3) 현재 밝기가 초기 밝기의 85%+ 복귀
+    function detectRefresh(currentScore, currentBrightness) {
+        if (Date.now() - lastRefreshAt < CONFIG.REFRESH_COOLDOWN_MS) return null;
+        const elapsedSec = (Date.now() - detectedAt) / 1000;
+        if (elapsedSec < CONFIG.REFRESH_MIN_ELAPSED_SEC) return null;
+
+        const scoreAvg = avgOf(recentScores);
+        const brightAvg = avgOf(recentBrightness);
+        const scoreJump = (recentScores.length >= CONFIG.SCORE_BUFFER_SIZE) &&
+                          (currentScore - scoreAvg) >= CONFIG.REFRESH_SCORE_DELTA;
+        const brightJump = (recentBrightness.length >= CONFIG.BRIGHTNESS_BUFFER_SIZE) &&
+                           (currentBrightness - brightAvg) >= CONFIG.REFRESH_BRIGHTNESS_DELTA;
+        const brightRecovered = initialBrightness > 0 &&
+                                currentBrightness >= initialBrightness * CONFIG.REFRESH_BRIGHTNESS_RATIO &&
+                                brightAvg < initialBrightness * (CONFIG.REFRESH_BRIGHTNESS_RATIO - 0.1);
+
+        if (scoreJump || brightJump || brightRecovered) {
+            return { scoreJump, brightJump, brightRecovered,
+                     score: currentScore, scoreAvg,
+                     brightness: currentBrightness, brightAvg, initialBrightness };
+        }
+        return null;
     }
 
-    function handleRefresh() {
+    function handleRefresh(reason) {
+        if (reason) console.info('[Timer] 갱신 감지', reason);
         lastRefreshAt = Date.now();
+        detectedAt = Date.now();
         startTime = Date.now();
         remainingSec = CONFIG.BUFF_DURATION_SECONDS;
         alertedThisCycle = false;
-        recentScores = []; // 스파이크 직후 평균 오염 방지
+        recentScores = [];
+        recentBrightness = [];
+        // 초기 밝기는 리셋 안 함 (깨끗한 기준값으로 재사용)
         emit('refreshed');
     }
 
@@ -211,14 +247,18 @@ const Timer = (function () {
                 roi = Detector.computeROI(lastLoc, lastSize, frameSize);
                 try { Storage.saveROI(roi); } catch (_) {}
                 initialScore = result.score;
+                initialBrightness = Detector.measureBrightness(frame, lastLoc, lastSize);
+                lastBrightness = initialBrightness;
                 detectedAt = Date.now();
                 startTime = Date.now();
                 remainingSec = CONFIG.BUFF_DURATION_SECONDS;
                 missStreak = 0;
                 alertedThisCycle = false;
                 recentScores = [];
+                recentBrightness = [];
                 pushScore(result.score);
-                emit('detect', { loc: lastLoc, score: result.score, scale: fixedScale });
+                pushBrightness(initialBrightness);
+                emit('detect', { loc: lastLoc, score: result.score, scale: fixedScale, brightness: initialBrightness });
                 transition('TRACKING');
             }
         } else {
@@ -233,12 +273,17 @@ const Timer = (function () {
             lastLoc = result.loc;
             lastSize = result.size;
 
-            if (detectRefreshSpike(result.score)) {
-                handleRefresh();
+            const brightness = Detector.measureBrightness(frame, lastLoc, lastSize);
+            lastBrightness = brightness;
+
+            const refreshInfo = detectRefresh(result.score, brightness);
+            if (refreshInfo) {
+                handleRefresh(refreshInfo);
             }
 
             lastScore = result.score;
             pushScore(result.score);
+            pushBrightness(brightness);
 
             updateRemainingFromClock();
 

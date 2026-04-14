@@ -204,10 +204,36 @@ const Detector = (function () {
         };
     }
 
+    // 아이콘 영역 평균 밝기(0~255). 회색 오버레이 진행도 측정용.
+    // ImageData는 RGBA uint8clamped.
+    function measureBrightness(imageData, loc, size) {
+        if (!imageData || !loc || !size) return 0;
+        const { width: W, data } = imageData;
+        const x0 = Math.max(0, loc[0]);
+        const y0 = Math.max(0, loc[1]);
+        const w = Math.min(size[0], imageData.width - x0);
+        const h = Math.min(size[1], imageData.height - y0);
+        if (w <= 0 || h <= 0) return 0;
+        let sum = 0;
+        let count = 0;
+        // 4픽셀 간격 샘플링 (성능)
+        const step = 2;
+        for (let y = 0; y < h; y += step) {
+            const row = (y0 + y) * W;
+            for (let x = 0; x < w; x += step) {
+                const i = (row + x0 + x) * 4;
+                // 표준 luminance
+                sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+                count++;
+            }
+        }
+        return count ? sum / count : 0;
+    }
+
     function getConfig() { return CONFIG; }
     function isReady() { return ready; }
 
-    return { init, scanFullFrame, scanROI, computeROI, getConfig, isReady };
+    return { init, scanFullFrame, scanROI, computeROI, measureBrightness, getConfig, isReady };
 })();
 
 if (typeof window !== 'undefined') window.Detector = Detector;

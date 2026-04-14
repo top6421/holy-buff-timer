@@ -7,8 +7,9 @@
         const ids = [
             'startShareBtn', 'stopShareBtn', 'shareStatus',
             'startDetectBtn', 'stopDetectBtn', 'detectStatus',
+            'toggleOverlayBtn', 'alertSeconds',
             'matchScore', 'remainingTime', 'progressBar',
-            'preview', 'previewPlaceholder',
+            'preview', 'previewPlaceholder', 'overlayCanvas',
             'startRecordBtn', 'stopRecordBtn', 'downloadBtn',
             'recordStatus', 'recordTime', 'fileSize',
             'playback', 'playbackPlaceholder',
@@ -72,6 +73,13 @@
         const saved = Storage.load();
         if (saved) console.info('[App] 저장 데이터 복원', saved);
 
+        // 저장된 알림시간 복원 (기본 5)
+        const savedAlert = (saved && typeof saved.alertSeconds === 'number') ? saved.alertSeconds : 5;
+        if (els.alertSeconds) els.alertSeconds.value = String(savedAlert);
+        try { Timer.setAlertThreshold(savedAlert); } catch (_) {}
+
+        Overlay.init('preview', 'overlayCanvas');
+
         Notifier.init().catch(() => {});
 
         const ok = await Detector.init();
@@ -83,6 +91,28 @@
         }
 
         OCR.init().catch((e) => console.warn('[App] OCR init 실패(비치명)', e));
+    }
+
+    function wireSettings() {
+        // 알림시간 입력 변경 → Timer + Storage 동기화
+        els.alertSeconds?.addEventListener('change', () => {
+            const v = Math.max(1, Math.min(60, parseInt(els.alertSeconds.value, 10) || 5));
+            els.alertSeconds.value = String(v);
+            if (Timer.setAlertThreshold(v)) {
+                const saved = Storage.load() || {};
+                saved.alertSeconds = v;
+                Storage.save(saved);
+                console.info('[App] 알림시간 =', v, '초');
+            }
+        });
+
+        // 영역 표시 토글
+        els.toggleOverlayBtn?.addEventListener('click', () => {
+            const on = !Overlay.isEnabled();
+            Overlay.setEnabled(on);
+            els.toggleOverlayBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+            els.toggleOverlayBtn.textContent = on ? '👁️ 영역 표시 ON' : '👁️ 영역 표시';
+        });
     }
 
     function wireShare() {
@@ -174,6 +204,15 @@
                 els.remainingTime.textContent = formatTime(remainingSec || 0);
             }
             updateProgress(remainingSec || 0, 120);
+
+            // Overlay 업데이트
+            const status = Timer.getStatus();
+            Overlay.update({
+                loc: status.loc,
+                size: status.size,
+                roi: status.roi,
+                videoSize: Capture.getVideoSize(),
+            });
         });
 
         Timer.on('detect', ({ loc, score }) => {
@@ -275,6 +314,7 @@
         initElements();
         resetTimerUI();
         await initModules();
+        wireSettings();
         wireShare();
         wireDetect();
         wireRecord();

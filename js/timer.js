@@ -299,11 +299,24 @@ const Timer = (function () {
             remainingSec,
             score: lastScore,
             roi,
+            loc: lastLoc,
+            size: lastSize,
             detectedAt,
         };
     }
 
-    return { on, start, stop, getStatus, rescan };
+    function setAlertThreshold(seconds) {
+        const n = Number(seconds);
+        if (!Number.isFinite(n) || n < 1 || n > 60) return false;
+        CONFIG.ALERT_THRESHOLD_SECONDS = n;
+        return true;
+    }
+
+    function getConfig() {
+        return { ...CONFIG };
+    }
+
+    return { on, start, stop, getStatus, rescan, setAlertThreshold, getConfig };
 })();
 
 if (typeof window !== 'undefined') window.Timer = Timer;

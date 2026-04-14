@@ -149,12 +149,24 @@ const Timer = (function () {
         if (!crop) return;
         try {
             const res = await OCR.readNumber(crop);
-            const n = res && res.number;
-            if (typeof n === 'number' && n >= 1 && n <= 59) {
-                remainingSec = n;
-                // 내부 시계 재동기화: 현재가 n초 남은 시점이라고 가정
-                startTime = Date.now() - (CONFIG.BUFF_DURATION_SECONDS - n) * 1000;
-            }
+            if (!res || typeof res.number !== 'number') return;
+            const n = res.number;
+            const conf = res.confidence || 0;
+
+            // 허용 범위: 1~59 (60초 이하 구간에서만 숫자 표시됨)
+            if (n < 1 || n > 59) return;
+            // 신뢰도 낮으면 무시 (Tesseract 기준 ~65 이상만)
+            if (conf < 65) return;
+            // 내부 시계와 크게 벗어나면 오인식으로 간주
+            // 시계 기반 추정값 ±3초 이내 + 시계보다 미래(큰 값) 아님
+            const clockEst = remainingSec;
+            const diff = n - clockEst;
+            if (diff > 1 || diff < -4) return;  // 미래로 점프 거의 금지, 과거로도 4초 초과 금지
+            // 단조 감소 강제: 이전 값보다 크면(과거로 돌아감) 거부
+            if (n > Math.ceil(clockEst) + 1) return;
+
+            remainingSec = n;
+            startTime = Date.now() - (CONFIG.BUFF_DURATION_SECONDS - n) * 1000;
         } catch (_) {
             // OCR 실패는 무시
         }

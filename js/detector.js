@@ -4,10 +4,12 @@
 const Detector = (function () {
     const CONFIG = {
         MATCH_THRESHOLD: 0.45,
-        INIT_SCAN_SCALES: [1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75,
+        INIT_SCAN_SCALES: [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75,
                            3.0, 3.25, 3.5, 3.75, 4.0, 4.25, 4.5],
-        ROI_PAD_LEFT_PX: 900,
-        ROI_PAD_RIGHT_PX: 200,
+        // ROI는 화면 오른쪽 끝 고정, 좌측으로 확장.
+        // 버프가 추가되며 홀리심볼 위치가 좌로 밀려도 ROI 범위는 안정적.
+        ROI_WIDTH_RATIO: 0.55,    // 프레임 너비의 55%를 ROI 가로폭으로
+        ROI_RIGHT_PAD_PX: 10,     // 오른쪽 끝에서 살짝 여유
         ROI_PAD_Y_PX: 20,
         TEMPLATE_PATH: "image/reference/icon.png",
     };
@@ -189,10 +191,15 @@ const Detector = (function () {
     }
 
     function computeROI(loc, size, frameSize) {
+        // X축: 화면 오른쪽 끝 기준으로 고정. 버프가 추가돼 아이콘이 좌로 밀려도 ROI는 불변.
+        const x1 = Math.min(frameSize.width, frameSize.width - CONFIG.ROI_RIGHT_PAD_PX);
+        const roiWidth = Math.round(frameSize.width * CONFIG.ROI_WIDTH_RATIO);
+        const x0 = Math.max(0, x1 - roiWidth);
+        // Y축: 감지된 아이콘의 Y 위치를 중심으로 타이트하게.
         return {
-            x0: Math.max(0, loc[0] - CONFIG.ROI_PAD_LEFT_PX),
+            x0,
             y0: Math.max(0, loc[1] - CONFIG.ROI_PAD_Y_PX),
-            x1: Math.min(frameSize.width, loc[0] + size[0] + CONFIG.ROI_PAD_RIGHT_PX),
+            x1,
             y1: Math.min(frameSize.height, loc[1] + size[1] + CONFIG.ROI_PAD_Y_PX),
         };
     }

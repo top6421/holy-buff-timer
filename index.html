@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>메이플랜드 홀리심볼 버프 타이머</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔔 홀리심볼 버프 타이머</h1>
+            <p class="subtitle">화면 공유 기반 버프 잔여시간 감지 · 만료 5초 전 알림</p>
+        </header>
+
+        <section class="panel">
+            <div class="controls">
+                <button id="startShareBtn" class="btn btn-primary">
+                    🖥️ 화면 공유 시작
+                </button>
+                <button id="stopShareBtn" class="btn btn-secondary" disabled>
+                    ⏹️ 공유 중지
+                </button>
+                <button id="startDetectBtn" class="btn btn-success" disabled>
+                    🔍 탐지 시작
+                </button>
+                <button id="stopDetectBtn" class="btn btn-secondary" disabled>
+                    ⏸️ 탐지 중지
+                </button>
+            </div>
+
+            <div class="status-bar">
+                <div class="status-item">
+                    <span class="label">공유 상태</span>
+                    <span id="shareStatus" class="value status-off">OFF</span>
+                </div>
+                <div class="status-item">
+                    <span class="label">탐지 상태</span>
+                    <span id="detectStatus" class="value state-idle">IDLE</span>
+                </div>
+                <div class="status-item">
+                    <span class="label">매칭 점수</span>
+                    <span id="matchScore" class="value">—</span>
+                </div>
+                <div class="status-item">
+                    <span class="label">잔여 시간</span>
+                    <span id="remainingTime" class="value mono-lg">--:--</span>
+                </div>
+            </div>
+
+            <div class="progress-wrapper" aria-label="잔여시간 프로그레스">
+                <div id="progressBar" class="progress-bar level-high" style="width: 0%"></div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>📺 프리뷰</h2>
+            <div class="preview-wrapper">
+                <video id="preview" autoplay muted playsinline></video>
+                <div id="previewPlaceholder" class="preview-placeholder">
+                    <span class="icon">📡</span>
+                    <p>화면 공유를 시작하면 여기에 표시됩니다</p>
+                </div>
+            </div>
+        </section>
+
+        <details class="panel debug-panel">
+            <summary>🎬 녹화 도구 (디버깅용)</summary>
+            <div class="controls" style="margin-top: 16px;">
+                <button id="startRecordBtn" class="btn btn-record" disabled>
+                    ⏺️ 녹화 시작
+                </button>
+                <button id="stopRecordBtn" class="btn btn-secondary" disabled>
+                    ⏸️ 녹화 중지
+                </button>
+                <button id="downloadBtn" class="btn btn-success" disabled>
+                    💾 영상 다운로드
+                </button>
+            </div>
+
+            <div class="status-bar">
+                <div class="status-item">
+                    <span class="label">녹화 상태</span>
+                    <span id="recordStatus" class="value status-off">OFF</span>
+                </div>
+                <div class="status-item">
+                    <span class="label">녹화 시간</span>
+                    <span id="recordTime" class="value">00:00</span>
+                </div>
+                <div class="status-item">
+                    <span class="label">파일 크기</span>
+                    <span id="fileSize" class="value">0 MB</span>
+                </div>
+            </div>
+
+            <div class="playback-wrapper" style="margin-top: 16px;">
+                <video id="playback" controls></video>
+                <div id="playbackPlaceholder" class="preview-placeholder">
+                    <span class="icon">📼</span>
+                    <p>녹화 완료 후 여기서 재생할 수 있습니다</p>
+                </div>
+            </div>
+        </details>
+
+        <footer class="footer">
+            <a href="POLICY.md" class="btn btn-secondary" target="_blank" rel="noopener">📜 정책 보기</a>
+            <span class="footer-note">측정·알림 전용, 자동화 아님</span>
+        </footer>
+    </div>
+
+    <canvas id="analysisCanvas" style="display:none;"></canvas>
+    <div id="flashOverlay" class="flash-overlay" style="display:none;"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script async src="https://docs.opencv.org/4.x/opencv.js" onload="window.__opencvReady=true"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/notifier.js"></script>
+    <script src="js/capture.js"></script>
+    <script src="js/detector.js"></script>
+    <script src="js/ocr.js"></script>
+    <script src="js/timer.js"></script>
+    <script src="js/recorder.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

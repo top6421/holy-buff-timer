@@ -1,0 +1,19 @@
+# 대용량 녹화 영상 (207MB) — 배포 불필요, 로컬에만 보관
+recording/
+
+# 분석용 중간 산출물
+image/captures/
+
+# macOS
+.DS_Store
+._*
+
+# 에디터
+.vscode/
+.idea/
+*.swp
+*~
+
+# 로그·임시파일
+*.log
+.claude/

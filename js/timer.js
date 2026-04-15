@@ -9,11 +9,12 @@ const Timer = (function () {
         CONSECUTIVE_MISS_RESCAN: 10,
         ALERT_THRESHOLD_SECONDS: 5,
         BUFF_DURATION_SECONDS: 120,
-        REFRESH_SCORE_DELTA: 0.10,         // 점수 스파이크 임계
-        REFRESH_BRIGHTNESS_DELTA: 15,      // 밝기(0~255) 스파이크 임계
-        REFRESH_BRIGHTNESS_RATIO: 0.85,    // 현재 밝기가 초기 밝기의 85% 이상이면 '깨끗한 상태' 판정
-        REFRESH_MIN_ELAPSED_SEC: 10,       // 감지 후 최소 이 시간 지나야 갱신 판정(오발동 방지)
-        REFRESH_COOLDOWN_MS: 5000,
+        REFRESH_SCORE_DELTA: 0.06,         // 점수 스파이크 임계 (낮춤: 초반 갱신은 점수차 작음)
+        REFRESH_BRIGHTNESS_DELTA: 10,      // 밝기(0~255) 스파이크 임계 (낮춤)
+        REFRESH_BRIGHTNESS_RATIO: 0.92,    // 현재 밝기가 초기 밝기의 92% 이상이면 '깨끗한 상태'
+        REFRESH_MIN_ELAPSED_SEC: 3,        // 최소 경과 시간 (10→3, 초반 갱신 허용)
+        REFRESH_COOLDOWN_MS: 3000,         // 쿨다운 (5→3초)
+        REFRESH_DEBUG: true,               // 매 틱 점수/밝기 로깅
         OCR_ACTIVE_BELOW_SEC: 60,
         SCORE_BUFFER_SIZE: 3,
         BRIGHTNESS_BUFFER_SIZE: 3,
@@ -125,26 +126,45 @@ const Timer = (function () {
     }
 
     // 갱신 감지 (3가지 지표):
-    // 1) 점수 스파이크  2) 밝기 스파이크  3) 현재 밝기가 초기 밝기의 85%+ 복귀
+    // 1) 점수 스파이크  2) 밝기 스파이크  3) 현재 밝기가 초기 밝기의 92%+ 복귀
     function detectRefresh(currentScore, currentBrightness) {
-        if (Date.now() - lastRefreshAt < CONFIG.REFRESH_COOLDOWN_MS) return null;
+        const sinceRefresh = Date.now() - lastRefreshAt;
         const elapsedSec = (Date.now() - detectedAt) / 1000;
-        if (elapsedSec < CONFIG.REFRESH_MIN_ELAPSED_SEC) return null;
+
+        if (sinceRefresh < CONFIG.REFRESH_COOLDOWN_MS) {
+            if (CONFIG.REFRESH_DEBUG) console.log(`[RefreshBlock] 쿨다운 ${(sinceRefresh/1000).toFixed(1)}s < ${CONFIG.REFRESH_COOLDOWN_MS/1000}s`);
+            return null;
+        }
+        if (elapsedSec < CONFIG.REFRESH_MIN_ELAPSED_SEC) {
+            if (CONFIG.REFRESH_DEBUG) console.log(`[RefreshBlock] 경과 ${elapsedSec.toFixed(1)}s < ${CONFIG.REFRESH_MIN_ELAPSED_SEC}s`);
+            return null;
+        }
 
         const scoreAvg = avgOf(recentScores);
         const brightAvg = avgOf(recentBrightness);
+        const scoreDelta = currentScore - scoreAvg;
+        const brightDelta = currentBrightness - brightAvg;
+        const brightRatio = initialBrightness > 0 ? currentBrightness / initialBrightness : 0;
+
         const scoreJump = (recentScores.length >= CONFIG.SCORE_BUFFER_SIZE) &&
-                          (currentScore - scoreAvg) >= CONFIG.REFRESH_SCORE_DELTA;
+                          scoreDelta >= CONFIG.REFRESH_SCORE_DELTA;
         const brightJump = (recentBrightness.length >= CONFIG.BRIGHTNESS_BUFFER_SIZE) &&
-                           (currentBrightness - brightAvg) >= CONFIG.REFRESH_BRIGHTNESS_DELTA;
+                           brightDelta >= CONFIG.REFRESH_BRIGHTNESS_DELTA;
         const brightRecovered = initialBrightness > 0 &&
-                                currentBrightness >= initialBrightness * CONFIG.REFRESH_BRIGHTNESS_RATIO &&
-                                brightAvg < initialBrightness * (CONFIG.REFRESH_BRIGHTNESS_RATIO - 0.1);
+                                brightRatio >= CONFIG.REFRESH_BRIGHTNESS_RATIO &&
+                                brightAvg < initialBrightness * (CONFIG.REFRESH_BRIGHTNESS_RATIO - 0.08);
+
+        if (CONFIG.REFRESH_DEBUG) {
+            console.log(`[RefreshChk] score=${currentScore.toFixed(3)} (Δ${scoreDelta.toFixed(3)}) ` +
+                        `bright=${currentBrightness.toFixed(1)} (Δ${brightDelta.toFixed(1)}, ratio=${brightRatio.toFixed(2)}) ` +
+                        `init=${initialBrightness.toFixed(1)} | jumps[S=${scoreJump}, B=${brightJump}, R=${brightRecovered}]`);
+        }
 
         if (scoreJump || brightJump || brightRecovered) {
             return { scoreJump, brightJump, brightRecovered,
-                     score: currentScore, scoreAvg,
-                     brightness: currentBrightness, brightAvg, initialBrightness };
+                     score: currentScore, scoreAvg, scoreDelta,
+                     brightness: currentBrightness, brightAvg, brightDelta,
+                     brightRatio, initialBrightness };
         }
         return null;
     }

@@ -19,9 +19,11 @@ const Timer = (function () {
         SCORE_BUFFER_SIZE: 3,
         BRIGHTNESS_BUFFER_SIZE: 3,
         OCR_REFRESH_JUMP_MIN: 10,
-        // 색상 마스크 전처리 후 Tesseract 신뢰도 관측 범위 52~70
-        OCR_MIN_CONFIDENCE: 50,
-        OCR_SYNC_CONFIRM: 2,               // 최초 동기화에 필요한 연속 단조감소 OCR 샘플 수
+        // Tesseract.js는 pytesseract보다 낮은 신뢰도 반환 경향 → 30으로 완화
+        OCR_MIN_CONFIDENCE: 30,
+        OCR_SYNC_CONFIRM: 2,               // 낮은 값에서는 2회 확인 필요
+        OCR_SYNC_FAST_MIN: 50,             // 이 이상 값이면 1회만 읽어도 즉시 동기화 (초반 5X 구간 빠른 캐치)
+        OCR_MAX_DECREMENT: 10,             // OCR 지연으로 인한 큰 감소도 허용 (1→3 → 1→10)
     };
 
     const listeners = {
@@ -227,21 +229,24 @@ const Timer = (function () {
             if (conf < CONFIG.OCR_MIN_CONFIDENCE) return;
 
             if (!ocrSynced) {
-                // 1~59 모두 유효 (60s 초과 구간엔 OCR이 공백만 반환하므로 분 지시자 필터링 불필요)
-                if (lastOcrNumber === null) {
+                // 초반 5X 구간은 1회 읽어도 바로 동기화 (50 이상 값은 오탐 가능성 매우 낮음)
+                if (n >= CONFIG.OCR_SYNC_FAST_MIN) {
+                    lastOcrNumber = n;
+                    ocrConfirmStreak = CONFIG.OCR_SYNC_CONFIRM; // 즉시 sync 트리거
+                    console.log(`[OCR-Sync] FAST n=${n} conf=${conf.toFixed(0)} (>=${CONFIG.OCR_SYNC_FAST_MIN})`);
+                } else if (lastOcrNumber === null) {
                     lastOcrNumber = n;
                     ocrConfirmStreak = 1;
                     console.log(`[OCR-Sync] first=${n} conf=${conf.toFixed(0)} streak=1`);
                 } else {
                     const decrement = lastOcrNumber - n;
-                    if (decrement >= 1 && decrement <= 3) {
+                    if (decrement >= 1 && decrement <= CONFIG.OCR_MAX_DECREMENT) {
                         ocrConfirmStreak++;
                         lastOcrNumber = n;
                         console.log(`[OCR-Sync] decrement=${decrement} n=${n} streak=${ocrConfirmStreak}`);
                     } else if (decrement === 0) {
                         console.log(`[OCR-Sync] same n=${n} (ignored)`);
                     } else {
-                        // 역점프 혹은 큰 점프 — 새 관측으로 리셋
                         console.log(`[OCR-Sync] reset (diff=${decrement})`);
                         lastOcrNumber = n;
                         ocrConfirmStreak = 1;

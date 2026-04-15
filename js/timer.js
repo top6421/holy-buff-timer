@@ -19,9 +19,9 @@ const Timer = (function () {
         SCORE_BUFFER_SIZE: 3,
         BRIGHTNESS_BUFFER_SIZE: 3,
         OCR_REFRESH_JUMP_MIN: 10,
-        OCR_MIN_CONFIDENCE: 50,            // 완화 (Tesseract가 작은 글씨에 보수적)
+        // 색상 마스크 전처리 후 Tesseract 신뢰도 관측 범위 52~70
+        OCR_MIN_CONFIDENCE: 50,
         OCR_SYNC_CONFIRM: 2,               // 최초 동기화에 필요한 연속 단조감소 OCR 샘플 수
-        OCR_FIRST_MIN_VALUE: 5,            // 최초 읽기 값은 이 이상이어야 (분 지시자 "1"/"2" 필터)
     };
 
     const listeners = {
@@ -194,25 +194,22 @@ const Timer = (function () {
         emit('refreshed');
     }
 
-    // OCR 영역: 아이콘 하단 60% (숫자 위치 여유있게), 3배 업스케일 (작은 텍스트 정확도)
+    // OCR 영역: 아이콘 좌하단 55%×55% (카운트다운 숫자 위치). 업스케일은 OCR.readNumber 내부에서 수행.
     function buildOcrCanvas() {
         if (!lastLoc || !lastSize) return null;
         const canvas = Capture.grabFrameCanvas();
         if (!canvas) return null;
         const sx = Math.max(0, lastLoc[0]);
-        const sy = Math.max(0, Math.round(lastLoc[1] + lastSize[1] * 0.4));
-        const sw = Math.min(canvas.width - sx, lastSize[0]);
-        const sh = Math.min(canvas.height - sy, Math.round(lastSize[1] * 0.6));
+        const sy = Math.max(0, Math.round(lastLoc[1] + lastSize[1] * 0.45));
+        const sw = Math.min(canvas.width - sx, Math.round(lastSize[0] * 0.55));
+        const sh = Math.min(canvas.height - sy, Math.round(lastSize[1] * 0.55));
         if (sw <= 0 || sh <= 0) return null;
 
-        const SCALE = 3;
         const crop = document.createElement('canvas');
-        crop.width = sw * SCALE;
-        crop.height = sh * SCALE;
+        crop.width = sw;
+        crop.height = sh;
         const ctx = crop.getContext('2d');
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw * SCALE, sh * SCALE);
+        ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
         return crop;
     }
 
@@ -230,30 +227,24 @@ const Timer = (function () {
             if (conf < CONFIG.OCR_MIN_CONFIDENCE) return;
 
             if (!ocrSynced) {
-                // 최초 읽기: 너무 작은 값(분 지시자 가능성)은 무시
+                // 1~59 모두 유효 (60s 초과 구간엔 OCR이 공백만 반환하므로 분 지시자 필터링 불필요)
                 if (lastOcrNumber === null) {
-                    if (n < CONFIG.OCR_FIRST_MIN_VALUE) {
-                        console.log(`[OCR-Sync] reject first=${n} (<${CONFIG.OCR_FIRST_MIN_VALUE}, likely minute indicator)`);
-                        return;
-                    }
                     lastOcrNumber = n;
                     ocrConfirmStreak = 1;
                     console.log(`[OCR-Sync] first=${n} conf=${conf.toFixed(0)} streak=1`);
                 } else {
                     const decrement = lastOcrNumber - n;
                     if (decrement >= 1 && decrement <= 3) {
-                        // 정상 단조 감소
                         ocrConfirmStreak++;
                         lastOcrNumber = n;
                         console.log(`[OCR-Sync] decrement=${decrement} n=${n} streak=${ocrConfirmStreak}`);
                     } else if (decrement === 0) {
-                        // 동일 값 — 분 지시자 의심, 스트릭 유지만
                         console.log(`[OCR-Sync] same n=${n} (ignored)`);
                     } else {
-                        // 역점프 혹은 큰 점프 — 리셋
+                        // 역점프 혹은 큰 점프 — 새 관측으로 리셋
                         console.log(`[OCR-Sync] reset (diff=${decrement})`);
                         lastOcrNumber = n;
-                        ocrConfirmStreak = n >= CONFIG.OCR_FIRST_MIN_VALUE ? 1 : 0;
+                        ocrConfirmStreak = 1;
                     }
                 }
 

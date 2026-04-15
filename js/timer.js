@@ -284,14 +284,6 @@ const Timer = (function () {
         }
     }
 
-    // 사용자가 직접 갱신 버튼 눌렀을 때
-    function manualRefresh() {
-        if (state !== 'TRACKING' && state !== 'ALERTING') return false;
-        handleRefresh();
-        transition('TRACKING');
-        return true;
-    }
-
     function updateRemainingFromClock() {
         if (!startTime) return;
         const elapsed = (Date.now() - startTime) / 1000;
@@ -459,7 +451,7 @@ const Timer = (function () {
         return { ...CONFIG };
     }
 
-    return { on, start, stop, getStatus, rescan, setAlertThreshold, getConfig, manualRefresh };
+    return { on, start, stop, getStatus, rescan, setAlertThreshold, getConfig };
 })();
 
 if (typeof window !== 'undefined') window.Timer = Timer;

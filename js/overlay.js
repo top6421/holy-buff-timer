@@ -110,10 +110,6 @@ const Overlay = (function () {
             ctx.setLineDash([]);
             ctx.fillStyle = 'rgba(250, 204, 21, 0.08)';
             ctx.fillRect(rx, ry, rw, rh);
-
-            ctx.font = '12px "SF Mono", Menlo, monospace';
-            ctx.fillStyle = 'rgba(250, 204, 21, 1)';
-            ctx.fillText('ROI (탐색 영역)', rx + 6, ry + 16);
         }
 
         // 아이콘 박스 (초록)

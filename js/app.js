@@ -13,7 +13,7 @@
         const ids = [
             'startShareBtn', 'stopShareBtn', 'shareStatus',
             'startDetectBtn', 'stopDetectBtn', 'detectStatus',
-            'refreshBtn', 'togglePipBtn', 'toggleOverlayBtn', 'alertSeconds',
+            'togglePipBtn', 'toggleOverlayBtn', 'alertSeconds',
             'remainingTime', 'progressBar',
             'preview', 'previewPlaceholder', 'overlayCanvas',
         ];
@@ -192,27 +192,12 @@
             Timer.stop();
             els.startDetectBtn.disabled = !Capture.isSharing();
             els.stopDetectBtn.disabled = true;
-            if (els.refreshBtn) els.refreshBtn.disabled = true;
             resetTimerUI();
-        });
-
-        // 수동 갱신: 버튼 + Space 단축키 (자동 감지가 놓쳤을 때 백업)
-        els.refreshBtn?.addEventListener('click', () => {
-            if (Timer.manualRefresh()) console.info('[App] 수동 갱신');
-        });
-        document.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
-                e.preventDefault();
-                if (Timer.manualRefresh()) console.info('[App] 수동 갱신 (Space)');
-            }
         });
 
         Timer.on('stateChange', (oldState, newState) => {
             const label = STATE_LABEL[newState] || newState;
             setState(els.detectStatus, label, stateClassFor(newState));
-            if (els.refreshBtn) {
-                els.refreshBtn.disabled = !(newState === 'TRACKING' || newState === 'ALERTING');
-            }
         });
 
         Timer.on('tick', ({ remainingSec }) => {

@@ -216,19 +216,37 @@
                 els.matchScore.textContent = (typeof score === 'number' && score > 0)
                     ? score.toFixed(3) : '—';
             }
-            if (els.remainingTime) {
-                els.remainingTime.textContent = formatTime(remainingSec || 0);
-            }
-            updateProgress(remainingSec || 0, 120);
-
-            // Overlay 업데이트
             const status = Timer.getStatus();
+            if (els.remainingTime) {
+                if (status.state === 'TRACKING' || status.state === 'ALERTING') {
+                    if (status.ocrSynced) {
+                        els.remainingTime.textContent = formatTime(remainingSec || 0);
+                    } else {
+                        els.remainingTime.textContent = '대기 중...';
+                    }
+                } else {
+                    els.remainingTime.textContent = '--:--';
+                }
+            }
+            // 동기화 전이면 바는 가득, 동기화 후에는 실시간 비율
+            if (status.ocrSynced) {
+                updateProgress(remainingSec || 0, 120);
+            } else if (status.state === 'TRACKING' || status.state === 'ALERTING') {
+                updateProgress(120, 120); // 가득 찬 상태 표시
+            } else {
+                updateProgress(0, 120);
+            }
+
             Overlay.update({
                 loc: status.loc,
                 size: status.size,
                 roi: status.roi,
                 videoSize: Capture.getVideoSize(),
             });
+        });
+
+        Timer.on('sync', (n) => {
+            console.info('[App] OCR 동기화 →', n, '초');
         });
 
         Timer.on('detect', ({ loc, score }) => {

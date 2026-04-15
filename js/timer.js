@@ -15,11 +15,12 @@ const Timer = (function () {
         REFRESH_MIN_ELAPSED_SEC: 3,        // 최소 경과 시간 (10→3, 초반 갱신 허용)
         REFRESH_COOLDOWN_MS: 3000,         // 쿨다운 (5→3초)
         REFRESH_DEBUG: true,               // 매 틱 점수/밝기 로깅
-        OCR_ACTIVE_BELOW_SEC: 60,
+        OCR_ACTIVE_BELOW_SEC: 60,           // 사용 안 함 (호환용 유지)
         SCORE_BUFFER_SIZE: 3,
         BRIGHTNESS_BUFFER_SIZE: 3,
         OCR_REFRESH_JUMP_MIN: 10,
         OCR_MIN_CONFIDENCE: 65,
+        OCR_SYNC_CONFIRM: 2,               // 최초 동기화에 필요한 연속 단조감소 OCR 샘플 수
     };
 
     const listeners = {
@@ -29,6 +30,7 @@ const Timer = (function () {
         alert: [],
         expired: [],
         refreshed: [],
+        sync: [],
     };
 
     let state = 'IDLE';
@@ -53,6 +55,9 @@ const Timer = (function () {
     let recentBrightness = [];
     let initialBrightness = 0;
     let lastBrightness = 0;
+    let ocrSynced = false;   // OCR로 최초 "59" 감지되어 카운트다운이 시작된 상태
+    let lastOcrNumber = null; // 직전 OCR 값 (연속 재확인용)
+    let ocrConfirmStreak = 0; // 동일/단조 감소 연속 확인 (오인식 방어)
 
     function on(event, callback) {
         if (!(event in listeners)) return;
@@ -94,6 +99,9 @@ const Timer = (function () {
         recentBrightness = [];
         initialBrightness = 0;
         lastBrightness = 0;
+        ocrSynced = false;
+        lastOcrNumber = null;
+        ocrConfirmStreak = 0;
     }
 
     function modulesReady() {
@@ -173,12 +181,15 @@ const Timer = (function () {
         if (reason) console.info('[Timer] 갱신 감지', reason);
         lastRefreshAt = Date.now();
         detectedAt = Date.now();
-        startTime = Date.now();
-        remainingSec = CONFIG.BUFF_DURATION_SECONDS;
+        // 갱신 후에는 다시 "대기" 상태로: OCR이 59초를 감지할 때까지 카운트다운 안 함
+        startTime = 0;
+        remainingSec = 0;
         alertedThisCycle = false;
         recentScores = [];
         recentBrightness = [];
-        // 초기 밝기는 리셋 안 함 (깨끗한 기준값으로 재사용)
+        ocrSynced = false;
+        lastOcrNumber = null;
+        ocrConfirmStreak = 0;
         emit('refreshed');
     }
 
@@ -201,7 +212,7 @@ const Timer = (function () {
         return crop;
     }
 
-    async function tryOcrCorrection() {
+    async function tryOcrRead() {
         if (typeof window.OCR === 'undefined' || !OCR.isReady()) return;
         const crop = buildOcrCanvas();
         if (!crop) return;
@@ -214,27 +225,43 @@ const Timer = (function () {
             if (n < 1 || n > 59) return;
             if (conf < CONFIG.OCR_MIN_CONFIDENCE) return;
 
-            const clockEst = remainingSec;
-            const diff = n - clockEst;
+            if (!ocrSynced) {
+                // 대기 상태 — 최초 동기화 시도
+                // 단조 감소(또는 동일) 연속 확인으로 오인식 필터링
+                if (lastOcrNumber === null || (lastOcrNumber - n >= 0 && lastOcrNumber - n <= 2)) {
+                    ocrConfirmStreak++;
+                } else {
+                    ocrConfirmStreak = 1;
+                }
+                lastOcrNumber = n;
+                console.log(`[OCR-Sync] candidate=${n} conf=${conf.toFixed(0)} streak=${ocrConfirmStreak}`);
 
-            // 큰 양의 점프(+10초 이상)는 갱신(재시전) 증거로 간주 → 갱신 처리
-            if (diff >= CONFIG.OCR_REFRESH_JUMP_MIN) {
-                if (Date.now() - lastRefreshAt >= CONFIG.REFRESH_COOLDOWN_MS) {
-                    handleRefresh();
-                    // 갱신 직후 실제 잔여 n초로 재보정
+                if (ocrConfirmStreak >= CONFIG.OCR_SYNC_CONFIRM) {
+                    ocrSynced = true;
                     remainingSec = n;
                     startTime = Date.now() - (CONFIG.BUFF_DURATION_SECONDS - n) * 1000;
+                    alertedThisCycle = false;
+                    console.info(`[Timer] OCR 동기화 완료 → 카운트다운 시작 (${n}초)`);
+                    emit('sync', n);
                 }
                 return;
             }
 
-            // 일반 보정: ±(−4,+1) 범위만 허용 (작은 오차 교정)
-            if (diff > 1 || diff < -4) return;
+            // 동기화 이후 — 시계와 큰 차이(+10s 이상) 있으면 갱신으로 간주
+            const diff = n - remainingSec;
+            if (diff >= CONFIG.OCR_REFRESH_JUMP_MIN) {
+                if (Date.now() - lastRefreshAt >= CONFIG.REFRESH_COOLDOWN_MS) {
+                    handleRefresh({ ocrJump: true, before: remainingSec, after: n });
+                }
+                return;
+            }
 
+            // 일반 보정: ±(−4,+1)만 허용
+            if (diff > 1 || diff < -4) return;
             remainingSec = n;
             startTime = Date.now() - (CONFIG.BUFF_DURATION_SECONDS - n) * 1000;
         } catch (_) {
-            // OCR 실패는 무시
+            // OCR 실패 무시
         }
     }
 
@@ -270,8 +297,12 @@ const Timer = (function () {
                 initialBrightness = Detector.measureBrightness(frame, lastLoc, lastSize);
                 lastBrightness = initialBrightness;
                 detectedAt = Date.now();
-                startTime = Date.now();
-                remainingSec = CONFIG.BUFF_DURATION_SECONDS;
+                // 카운트다운은 OCR이 첫 유효 숫자(≤59)를 읽을 때까지 대기
+                startTime = 0;
+                remainingSec = 0;
+                ocrSynced = false;
+                lastOcrNumber = null;
+                ocrConfirmStreak = 0;
                 missStreak = 0;
                 alertedThisCycle = false;
                 recentScores = [];
@@ -305,29 +336,26 @@ const Timer = (function () {
             pushScore(result.score);
             pushBrightness(brightness);
 
-            updateRemainingFromClock();
+            // 카운트다운 시계는 동기화 완료 후에만 진행
+            if (ocrSynced) updateRemainingFromClock();
 
-            // OCR는 60초 이하에서만 (Tesseract 비용)
-            if (remainingSec > 0 && remainingSec <= CONFIG.OCR_ACTIVE_BELOW_SEC) {
-                await tryOcrCorrection();
-            }
+            // OCR는 항상 시도 (동기화 전: 최초 숫자 포착 / 동기화 후: 보정·갱신감지)
+            await tryOcrRead();
 
-            if (remainingSec <= 0) {
+            if (ocrSynced && remainingSec <= 0) {
                 emit('expired');
                 // TRACKING 유지 — 갱신/소실 감지 계속
                 alertedThisCycle = false;
-            } else if (remainingSec <= CONFIG.ALERT_THRESHOLD_SECONDS && !alertedThisCycle) {
+            } else if (ocrSynced && remainingSec <= CONFIG.ALERT_THRESHOLD_SECONDS && remainingSec > 0 && !alertedThisCycle) {
                 alertedThisCycle = true;
                 transition('ALERTING');
                 try { Notifier.alertExpiring(Math.ceil(remainingSec)); } catch (_) {}
                 emit('alert', Math.ceil(remainingSec));
-                // 즉시 TRACKING 복귀 — 갱신 대기
                 transition('TRACKING');
             }
         } else {
             missStreak++;
-            // 실패 중에도 내부 시계는 흘러감
-            updateRemainingFromClock();
+            if (ocrSynced) updateRemainingFromClock();
             if (missStreak >= CONFIG.CONSECUTIVE_MISS_RESCAN) {
                 resetTrackingContext();
                 transition('SCANNING');
@@ -397,6 +425,7 @@ const Timer = (function () {
             loc: lastLoc,
             size: lastSize,
             detectedAt,
+            ocrSynced,
         };
     }
 

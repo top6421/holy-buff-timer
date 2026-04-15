@@ -8,7 +8,7 @@ const Detector = (function () {
                            3.0, 3.25, 3.5, 3.75, 4.0, 4.25, 4.5],
         // ROI는 화면 오른쪽 끝 고정, 좌측으로 확장.
         // 버프가 추가되며 홀리심볼 위치가 좌로 밀려도 ROI 범위는 안정적.
-        ROI_WIDTH_RATIO: 0.28,    // 프레임 너비의 28%를 ROI 가로폭으로 (기존 0.55의 절반)
+        ROI_WIDTH_RATIO: 0.35,    // 프레임 너비의 35%를 ROI 가로폭으로
         ROI_RIGHT_PAD_PX: 10,     // 오른쪽 끝에서 살짝 여유
         ROI_PAD_Y_PX: 20,
         TEMPLATE_PATH: "image/reference/icon.png",

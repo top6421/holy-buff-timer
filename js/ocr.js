@@ -97,7 +97,8 @@ const OCR = (function () {
 
     async function readNumber(imageSource, options) {
         const opts = options || {};
-        const preprocess = opts.preprocess !== false; // 기본 true
+        // preprocess 기본값 true — 호출부가 명시적으로 false를 주면 원본 사용
+        const preprocess = opts.preprocess !== false;
 
         if (!ready || !worker) {
             const ok = await init();
@@ -141,4 +142,4 @@ const OCR = (function () {
     return { init, readNumber, terminate, isReady, preprocForTimerOcr };
 })();
 
-window.OCR = OCR;
+if (typeof window !== 'undefined') window.OCR = OCR;

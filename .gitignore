@@ -17,3 +17,10 @@ image/captures/
 # 로그·임시파일
 *.log
 .claude/
+
+# Python
+*.pyc
+__pycache__/
+
+# Node
+node_modules/

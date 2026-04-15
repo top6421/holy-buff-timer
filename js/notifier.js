@@ -111,4 +111,4 @@ const Notifier = (function () {
     return { init, beep, notify, flash, alertExpiring };
 })();
 
-window.Notifier = Notifier;
+if (typeof window !== 'undefined') window.Notifier = Notifier;

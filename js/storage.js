@@ -48,4 +48,4 @@ const Storage = (function () {
     return { save, load, saveROI, loadROI, clear };
 })();
 
-window.Storage = Storage;
+if (typeof window !== 'undefined') window.Storage = Storage;

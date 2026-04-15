@@ -9,21 +9,23 @@ const Timer = (function () {
         CONSECUTIVE_MISS_RESCAN: 10,
         ALERT_THRESHOLD_SECONDS: 5,
         BUFF_DURATION_SECONDS: 120,
-        REFRESH_SCORE_DELTA: 0.06,         // 점수 스파이크 임계 (낮춤: 초반 갱신은 점수차 작음)
-        REFRESH_BRIGHTNESS_DELTA: 10,      // 밝기(0~255) 스파이크 임계 (낮춤)
-        REFRESH_BRIGHTNESS_RATIO: 0.92,    // 현재 밝기가 초기 밝기의 92% 이상이면 '깨끗한 상태'
-        REFRESH_MIN_ELAPSED_SEC: 3,        // 최소 경과 시간 (10→3, 초반 갱신 허용)
-        REFRESH_COOLDOWN_MS: 3000,         // 쿨다운 (5→3초)
-        REFRESH_DEBUG: true,               // 매 틱 점수/밝기 로깅
-        OCR_ACTIVE_BELOW_SEC: 60,           // 사용 안 함 (호환용 유지)
+        REFRESH_SCORE_DELTA: 0.06,
+        REFRESH_BRIGHTNESS_DELTA: 10,
+        REFRESH_BRIGHTNESS_RATIO: 0.92,
+        REFRESH_MIN_ELAPSED_SEC: 3,
+        REFRESH_COOLDOWN_MS: 3000,
+        REFRESH_DEBUG: false,
+        OCR_DEBUG: false,
         SCORE_BUFFER_SIZE: 3,
         BRIGHTNESS_BUFFER_SIZE: 3,
         OCR_REFRESH_JUMP_MIN: 10,
         // Tesseract.js는 pytesseract보다 낮은 신뢰도 반환 경향 → 30으로 완화
         OCR_MIN_CONFIDENCE: 30,
-        OCR_SYNC_CONFIRM: 2,               // 낮은 값에서는 2회 확인 필요
-        OCR_SYNC_FAST_MIN: 50,             // 이 이상 값이면 1회만 읽어도 즉시 동기화 (초반 5X 구간 빠른 캐치)
-        OCR_MAX_DECREMENT: 10,             // OCR 지연으로 인한 큰 감소도 허용 (1→3 → 1→10)
+        OCR_SYNC_CONFIRM: 2,
+        // 이 이상 값이면 1회만 읽어도 즉시 동기화 (초반 5X 구간 빠른 캐치)
+        OCR_SYNC_FAST_MIN: 50,
+        // OCR 지연으로 인한 큰 감소 허용
+        OCR_MAX_DECREMENT: 10,
     };
 
     const listeners = {
@@ -80,7 +82,7 @@ const Timer = (function () {
         if (newState === state) return;
         const oldState = state;
         state = newState;
-        console.log('[Timer]', oldState, '->', newState);
+        console.info('[Timer] transition', oldState, '->', newState);
         emit('stateChange', oldState, newState);
     }
 
@@ -143,11 +145,11 @@ const Timer = (function () {
         const elapsedSec = (Date.now() - detectedAt) / 1000;
 
         if (sinceRefresh < CONFIG.REFRESH_COOLDOWN_MS) {
-            if (CONFIG.REFRESH_DEBUG) console.log(`[RefreshBlock] 쿨다운 ${(sinceRefresh/1000).toFixed(1)}s < ${CONFIG.REFRESH_COOLDOWN_MS/1000}s`);
+            if (CONFIG.REFRESH_DEBUG) console.log(`[Timer][RefreshBlock] 쿨다운 ${(sinceRefresh/1000).toFixed(1)}s < ${CONFIG.REFRESH_COOLDOWN_MS/1000}s`);
             return null;
         }
         if (elapsedSec < CONFIG.REFRESH_MIN_ELAPSED_SEC) {
-            if (CONFIG.REFRESH_DEBUG) console.log(`[RefreshBlock] 경과 ${elapsedSec.toFixed(1)}s < ${CONFIG.REFRESH_MIN_ELAPSED_SEC}s`);
+            if (CONFIG.REFRESH_DEBUG) console.log(`[Timer][RefreshBlock] 경과 ${elapsedSec.toFixed(1)}s < ${CONFIG.REFRESH_MIN_ELAPSED_SEC}s`);
             return null;
         }
 
@@ -166,7 +168,7 @@ const Timer = (function () {
                                 brightAvg < initialBrightness * (CONFIG.REFRESH_BRIGHTNESS_RATIO - 0.08);
 
         if (CONFIG.REFRESH_DEBUG) {
-            console.log(`[RefreshChk] score=${currentScore.toFixed(3)} (Δ${scoreDelta.toFixed(3)}) ` +
+            console.log(`[Timer][RefreshChk] score=${currentScore.toFixed(3)} (Δ${scoreDelta.toFixed(3)}) ` +
                         `bright=${currentBrightness.toFixed(1)} (Δ${brightDelta.toFixed(1)}, ratio=${brightRatio.toFixed(2)}) ` +
                         `init=${initialBrightness.toFixed(1)} | jumps[S=${scoreJump}, B=${brightJump}, R=${brightRecovered}]`);
         }
@@ -232,22 +234,22 @@ const Timer = (function () {
                 // 초반 5X 구간은 1회 읽어도 바로 동기화 (50 이상 값은 오탐 가능성 매우 낮음)
                 if (n >= CONFIG.OCR_SYNC_FAST_MIN) {
                     lastOcrNumber = n;
-                    ocrConfirmStreak = CONFIG.OCR_SYNC_CONFIRM; // 즉시 sync 트리거
-                    console.log(`[OCR-Sync] FAST n=${n} conf=${conf.toFixed(0)} (>=${CONFIG.OCR_SYNC_FAST_MIN})`);
+                    ocrConfirmStreak = CONFIG.OCR_SYNC_CONFIRM;
+                    if (CONFIG.OCR_DEBUG) console.log(`[Timer][OCR-Sync] FAST n=${n} conf=${conf.toFixed(0)} (>=${CONFIG.OCR_SYNC_FAST_MIN})`);
                 } else if (lastOcrNumber === null) {
                     lastOcrNumber = n;
                     ocrConfirmStreak = 1;
-                    console.log(`[OCR-Sync] first=${n} conf=${conf.toFixed(0)} streak=1`);
+                    if (CONFIG.OCR_DEBUG) console.log(`[Timer][OCR-Sync] first=${n} conf=${conf.toFixed(0)} streak=1`);
                 } else {
                     const decrement = lastOcrNumber - n;
                     if (decrement >= 1 && decrement <= CONFIG.OCR_MAX_DECREMENT) {
                         ocrConfirmStreak++;
                         lastOcrNumber = n;
-                        console.log(`[OCR-Sync] decrement=${decrement} n=${n} streak=${ocrConfirmStreak}`);
+                        if (CONFIG.OCR_DEBUG) console.log(`[Timer][OCR-Sync] decrement=${decrement} n=${n} streak=${ocrConfirmStreak}`);
                     } else if (decrement === 0) {
-                        console.log(`[OCR-Sync] same n=${n} (ignored)`);
+                        if (CONFIG.OCR_DEBUG) console.log(`[Timer][OCR-Sync] same n=${n} (ignored)`);
                     } else {
-                        console.log(`[OCR-Sync] reset (diff=${decrement})`);
+                        if (CONFIG.OCR_DEBUG) console.log(`[Timer][OCR-Sync] reset (diff=${decrement})`);
                         lastOcrNumber = n;
                         ocrConfirmStreak = 1;
                     }

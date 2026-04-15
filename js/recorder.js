@@ -148,3 +148,5 @@ const Recorder = (function () {
         isRecording: () => mediaRecorder?.state === 'recording',
     };
 })();
+
+if (typeof window !== 'undefined') window.Recorder = Recorder;

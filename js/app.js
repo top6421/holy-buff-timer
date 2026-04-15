@@ -1,18 +1,21 @@
 (function () {
     const els = {};
-    let recordTimerId = null;
     let detectorReady = false;
+
+    const STATE_LABEL = {
+        IDLE: '대기',
+        SCANNING: '🔍 탐색 중',
+        TRACKING: '✅ 탐지 중',
+        ALERTING: '⚠️ 만료 임박',
+    };
 
     function initElements() {
         const ids = [
             'startShareBtn', 'stopShareBtn', 'shareStatus',
             'startDetectBtn', 'stopDetectBtn', 'detectStatus',
-            'refreshBtn', 'toggleOverlayBtn', 'alertSeconds',
-            'matchScore', 'remainingTime', 'progressBar',
+            'refreshBtn', 'togglePipBtn', 'toggleOverlayBtn', 'alertSeconds',
+            'remainingTime', 'progressBar',
             'preview', 'previewPlaceholder', 'overlayCanvas',
-            'startRecordBtn', 'stopRecordBtn', 'downloadBtn',
-            'recordStatus', 'recordTime', 'fileSize',
-            'playback', 'playbackPlaceholder',
         ];
         for (const id of ids) els[id] = document.getElementById(id);
     }
@@ -22,17 +25,6 @@
         const m = Math.floor(s / 60);
         const r = s % 60;
         return `${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
-    }
-
-    function formatRecordMs(ms) {
-        const s = Math.floor(ms / 1000);
-        const m = Math.floor(s / 60);
-        return `${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-    }
-
-    function formatSize(bytes) {
-        const mb = bytes / 1024 / 1024;
-        return mb < 1 ? `${(bytes / 1024).toFixed(0)} KB` : `${mb.toFixed(2)} MB`;
     }
 
     function setState(el, text, className) {
@@ -63,17 +55,15 @@
     }
 
     function resetTimerUI() {
-        if (els.matchScore) els.matchScore.textContent = '—';
         if (els.remainingTime) els.remainingTime.textContent = '--:--';
         updateProgress(120, 120);
-        setState(els.detectStatus, 'IDLE', 'state-idle');
+        setState(els.detectStatus, STATE_LABEL.IDLE, 'state-idle');
     }
 
     async function initModules() {
         const saved = Storage.load();
         if (saved) console.info('[App] 저장 데이터 복원', saved);
 
-        // 저장된 알림시간 복원 (기본 5)
         const savedAlert = (saved && typeof saved.alertSeconds === 'number') ? saved.alertSeconds : 5;
         if (els.alertSeconds) els.alertSeconds.value = String(savedAlert);
         try { Timer.setAlertThreshold(savedAlert); } catch (_) {}
@@ -86,15 +76,20 @@
         detectorReady = ok;
         if (!ok) {
             console.error('[App] Detector 초기화 실패 — 탐지 기능 비활성화');
-            setState(els.detectStatus, 'OpenCV 로드 실패', 'state-idle');
+            setState(els.detectStatus, '⚠️ 라이브러리 로드 실패', 'state-idle');
             if (els.startDetectBtn) els.startDetectBtn.disabled = true;
         }
 
         OCR.init().catch((e) => console.warn('[App] OCR init 실패(비치명)', e));
+
+        // PIP 미지원 브라우저는 버튼 비활성
+        if (els.togglePipBtn && !PIP.isSupported()) {
+            els.togglePipBtn.disabled = true;
+            els.togglePipBtn.title = '이 브라우저는 PIP 모드를 지원하지 않습니다 (Chrome/Edge 116+ 필요)';
+        }
     }
 
     function wireSettings() {
-        // 알림시간 입력 변경 → Timer + Storage 동기화
         els.alertSeconds?.addEventListener('change', () => {
             const v = Math.max(1, Math.min(60, parseInt(els.alertSeconds.value, 10) || 5));
             els.alertSeconds.value = String(v);
@@ -106,20 +101,35 @@
             }
         });
 
-        // 영역 표시 토글
         els.toggleOverlayBtn?.addEventListener('click', () => {
             const on = !Overlay.isEnabled();
             Overlay.setEnabled(on);
             els.toggleOverlayBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
             els.toggleOverlayBtn.textContent = on ? '👁️ 영역 표시 ON' : '👁️ 영역 표시';
         });
+
+        els.togglePipBtn?.addEventListener('click', async () => {
+            await PIP.toggle();
+        });
+
+        PIP.on('open', () => {
+            if (els.togglePipBtn) {
+                els.togglePipBtn.setAttribute('aria-pressed', 'true');
+                els.togglePipBtn.textContent = '📺 PIP 닫기';
+            }
+        });
+        PIP.on('close', () => {
+            if (els.togglePipBtn) {
+                els.togglePipBtn.setAttribute('aria-pressed', 'false');
+                els.togglePipBtn.textContent = '📺 PIP 모드';
+            }
+        });
     }
 
     function wireShare() {
         els.startShareBtn?.addEventListener('click', async () => {
             try {
-                const stream = await Capture.startShare('preview');
-                if (!stream) return;
+                await Capture.startShare('preview');
             } catch (e) {
                 console.error('[App] 화면 공유 실패:', e);
             }
@@ -135,22 +145,11 @@
             els.startShareBtn.disabled = true;
             els.stopShareBtn.disabled = false;
             if (detectorReady) els.startDetectBtn.disabled = false;
-            els.startRecordBtn.disabled = false;
         });
 
         Capture.on('shareStop', () => {
-            // Timer 자동 정지
             try { Timer.stop(); } catch (_) {}
-
-            // Recorder 자동 정지 (녹화 중인 경우)
-            try {
-                if (Recorder.isRecording && Recorder.isRecording()) {
-                    Recorder.stopRecord();
-                }
-                if (Recorder.isSharing && Recorder.isSharing()) {
-                    Recorder.stopShare();
-                }
-            } catch (_) {}
+            try { PIP.close(); } catch (_) {}
 
             setState(els.shareStatus, 'OFF', 'status-off');
             els.previewPlaceholder?.classList.remove('hidden');
@@ -160,17 +159,22 @@
             els.stopShareBtn.disabled = true;
             els.startDetectBtn.disabled = true;
             els.stopDetectBtn.disabled = true;
-            els.startRecordBtn.disabled = true;
-            els.stopRecordBtn.disabled = true;
 
             resetTimerUI();
-            stopRecordTicker();
-            setState(els.recordStatus, 'OFF', 'status-off');
         });
 
         Capture.on('error', (err) => {
             console.error('[App] Capture error', err);
         });
+    }
+
+    function pipPayload(remainingSec, status) {
+        return {
+            state: status.state,
+            remainingSec: remainingSec || 0,
+            ocrSynced: status.ocrSynced,
+            alertSeconds: Timer.getConfig().ALERT_THRESHOLD_SECONDS,
+        };
     }
 
     function wireDetect() {
@@ -192,7 +196,7 @@
             resetTimerUI();
         });
 
-        // 수동 갱신 버튼 + 스페이스바 단축키
+        // 수동 갱신: 버튼 + Space 단축키 (자동 감지가 놓쳤을 때 백업)
         els.refreshBtn?.addEventListener('click', () => {
             if (Timer.manualRefresh()) console.info('[App] 수동 갱신');
         });
@@ -204,35 +208,28 @@
         });
 
         Timer.on('stateChange', (oldState, newState) => {
-            setState(els.detectStatus, newState, stateClassFor(newState));
-            // TRACKING/ALERTING 구간에서만 갱신 버튼 활성
+            const label = STATE_LABEL[newState] || newState;
+            setState(els.detectStatus, label, stateClassFor(newState));
             if (els.refreshBtn) {
                 els.refreshBtn.disabled = !(newState === 'TRACKING' || newState === 'ALERTING');
             }
         });
 
-        Timer.on('tick', ({ remainingSec, score }) => {
-            if (els.matchScore) {
-                els.matchScore.textContent = (typeof score === 'number' && score > 0)
-                    ? score.toFixed(3) : '—';
-            }
+        Timer.on('tick', ({ remainingSec }) => {
             const status = Timer.getStatus();
             if (els.remainingTime) {
                 if (status.state === 'TRACKING' || status.state === 'ALERTING') {
-                    if (status.ocrSynced) {
-                        els.remainingTime.textContent = formatTime(remainingSec || 0);
-                    } else {
-                        els.remainingTime.textContent = '대기 중...';
-                    }
+                    els.remainingTime.textContent = status.ocrSynced
+                        ? formatTime(remainingSec || 0)
+                        : '대기 중...';
                 } else {
                     els.remainingTime.textContent = '--:--';
                 }
             }
-            // 동기화 전이면 바는 가득, 동기화 후에는 실시간 비율
             if (status.ocrSynced) {
                 updateProgress(remainingSec || 0, 120);
             } else if (status.state === 'TRACKING' || status.state === 'ALERTING') {
-                updateProgress(120, 120); // 가득 찬 상태 표시
+                updateProgress(120, 120);
             } else {
                 updateProgress(0, 120);
             }
@@ -243,6 +240,9 @@
                 roi: status.roi,
                 videoSize: Capture.getVideoSize(),
             });
+
+            // PIP 창 동기 갱신
+            if (PIP.isOpen()) PIP.update(pipPayload(remainingSec, status));
         });
 
         Timer.on('sync', (n) => {
@@ -259,6 +259,7 @@
 
         Timer.on('refreshed', () => {
             console.info('[App] 갱신 감지');
+            if (PIP.isOpen()) PIP.notifyRefreshed?.();
         });
 
         Timer.on('expired', () => {
@@ -268,82 +269,6 @@
         });
     }
 
-    function startRecordTicker() {
-        stopRecordTicker();
-        recordTimerId = setInterval(() => {
-            if (els.recordTime) els.recordTime.textContent = formatRecordMs(Recorder.getRecordDuration());
-            if (els.fileSize) els.fileSize.textContent = formatSize(Recorder.getTotalSize());
-        }, 500);
-    }
-
-    function stopRecordTicker() {
-        if (recordTimerId) {
-            clearInterval(recordTimerId);
-            recordTimerId = null;
-        }
-    }
-
-    function wireRecord() {
-        Recorder.on('onRecordStart', () => {
-            setState(els.recordStatus, '● REC', 'status-recording');
-            els.startRecordBtn.disabled = true;
-            els.stopRecordBtn.disabled = false;
-            els.downloadBtn.disabled = true;
-            startRecordTicker();
-        });
-
-        Recorder.on('onRecordStop', (blob) => {
-            setState(els.recordStatus, 'OFF', 'status-off');
-            els.startRecordBtn.disabled = !Capture.isSharing();
-            els.stopRecordBtn.disabled = true;
-            els.downloadBtn.disabled = false;
-            stopRecordTicker();
-
-            if (blob) {
-                const url = URL.createObjectURL(blob);
-                if (els.playback) els.playback.src = url;
-                els.playbackPlaceholder?.classList.add('hidden');
-                if (els.fileSize) els.fileSize.textContent = formatSize(blob.size);
-            }
-        });
-
-        els.startRecordBtn?.addEventListener('click', async () => {
-            try {
-                // Recorder는 자체 스트림이 필요. Capture 스트림 재사용 시도.
-                if (!Recorder.isSharing || !Recorder.isSharing()) {
-                    const stream = Capture.getStream && Capture.getStream();
-                    if (stream) {
-                        // Recorder 내부에 mediaStream 주입 필요 — 없으면 별도 share 호출
-                        try {
-                            await Recorder.startShare();
-                        } catch (e) {
-                            if (e && e.name !== 'NotAllowedError') {
-                                console.error('[App] 녹화용 화면 공유 실패:', e);
-                                return;
-                            }
-                            return;
-                        }
-                    } else {
-                        await Recorder.startShare();
-                    }
-                }
-                Recorder.startRecord();
-            } catch (err) {
-                console.error('[App] 녹화 시작 실패:', err);
-            }
-        });
-
-        els.stopRecordBtn?.addEventListener('click', () => {
-            try { Recorder.stopRecord(); } catch (e) { console.error(e); }
-        });
-
-        els.downloadBtn?.addEventListener('click', () => {
-            try { Recorder.download(); } catch (e) { console.error('[App] 다운로드 실패:', e); }
-        });
-
-        els.playbackPlaceholder?.classList.remove('hidden');
-    }
-
     document.addEventListener('DOMContentLoaded', async () => {
         initElements();
         resetTimerUI();
@@ -351,6 +276,5 @@
         wireSettings();
         wireShare();
         wireDetect();
-        wireRecord();
     });
 })();

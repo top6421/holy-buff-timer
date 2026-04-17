@@ -7,22 +7,24 @@ const Detector = (function () {
     let cvReady = false;
     let templateMat = null;
     let roi = null;
+    // detect()용 재사용 캔버스
+    let cropCanvas = null;
+    let cropCtx = null;
 
     function log(...args) { console.log('[Detector]', ...args); }
     function err(...args) { console.error('[Detector]', ...args); }
 
-    function waitForOpenCV(timeoutMs = 15000) {
+    function waitForOpenCV(timeoutMs = 30000) {
         return new Promise((resolve, reject) => {
             const start = performance.now();
             (function poll() {
-                if (typeof cv !== 'undefined' && window.__opencvReady === true &&
-                    cv.Mat && cv.matchTemplate) {
+                if (typeof cv !== 'undefined' && cv.Mat && cv.matchTemplate) {
                     return resolve();
                 }
                 if (performance.now() - start > timeoutMs) {
                     return reject(new Error('OpenCV.js 로드 타임아웃'));
                 }
-                setTimeout(poll, 50);
+                setTimeout(poll, 100);
             })();
         });
     }
@@ -100,16 +102,24 @@ const Detector = (function () {
 
         if (rw < templateMat.cols || rh < templateMat.rows) return fail;
 
-        const canvas = document.createElement('canvas');
-        canvas.width = rw;
-        canvas.height = rh;
-        const ctx = canvas.getContext('2d');
-        const full = new ImageData(
-            new Uint8ClampedArray(imageData.data.buffer),
-            fw, fh
-        );
-        ctx.putImageData(full, -rx, -ry);
-        const cropped = ctx.getImageData(0, 0, rw, rh);
+        if (!cropCanvas) {
+            cropCanvas = document.createElement('canvas');
+            cropCtx = cropCanvas.getContext('2d', { willReadFrequently: true });
+        }
+        if (cropCanvas.width !== rw || cropCanvas.height !== rh) {
+            cropCanvas.width = rw;
+            cropCanvas.height = rh;
+        }
+
+        // ROI 영역만 직접 복사 (putImageData offset 방식보다 빠름)
+        const cropped = new ImageData(rw, rh);
+        const src = imageData.data;
+        const dst = cropped.data;
+        for (let row = 0; row < rh; row++) {
+            const srcOff = ((ry + row) * fw + rx) * 4;
+            const dstOff = row * rw * 4;
+            dst.set(src.subarray(srcOff, srcOff + rw * 4), dstOff);
+        }
 
         let roiMat = null;
         let roiGray = null;

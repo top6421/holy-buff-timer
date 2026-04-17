@@ -13,58 +13,74 @@
             <p class="subtitle">자동 알림 · 무설치 · 100% 무료</p>
         </header>
 
-        <!-- 사용 방법 안내 (접이식) -->
         <details class="panel guide-panel" open>
             <summary>📋 사용 방법</summary>
             <ol>
-                <li>아래에서 <strong>현재 게임 해상도</strong>에 맞는 알림 시간을 선택하세요</li>
+                <li><strong>해상도</strong>와 <strong>알림 시간</strong>을 선택하세요</li>
                 <li><strong>화면 공유</strong> 버튼을 눌러 "MapleStory Worlds" 창을 선택하세요</li>
-                <li><strong>탐지 시작</strong> 버튼을 눌러 감지를 시작하세요</li>
-                <li>버프 잔여시간이 선택한 초에 도달하면 자동으로 알림이 울립니다</li>
+                <li><strong>탐지 시작</strong>을 누르면 자동으로 알림이 울립니다</li>
             </ol>
             <p class="warn">⚠️ 메이플랜드 해상도 변경 후 창 크기를 변경하지 마세요</p>
         </details>
 
-        <!-- 1단계: 템플릿 선택 -->
+        <!-- 1. 해상도 + 알림 시간 -->
         <section class="panel">
-            <h2>1. 알림 시간 선택</h2>
-            <p class="current-template">선택된 알림: <strong id="currentTemplateName">없음</strong></p>
+            <h2>1. 해상도 및 알림 시간 선택</h2>
+            <p class="current-template">선택됨: <strong id="currentTemplateName">없음</strong></p>
+
             <div id="templateGrid" class="template-grid">
-                <!-- 1280 해상도 -->
                 <p class="grid-label">1280×800 / 1280×720</p>
-                <div class="template-item" data-src="image/templates/1280/15.png" data-name="1280 - 15초" data-rolw="450" data-rolh="50" data-roly="122"><img src="image/templates/1280/15.png" alt="15초"><span>15초</span></div>
-                <div class="template-item" data-src="image/templates/1280/20.png" data-name="1280 - 20초" data-rolw="450" data-rolh="50" data-roly="122"><img src="image/templates/1280/20.png" alt="20초"><span>20초</span></div>
-                <div class="template-item" data-src="image/templates/1280/30.png" data-name="1280 - 30초" data-rolw="450" data-rolh="50" data-roly="122"><img src="image/templates/1280/30.png" alt="30초"><span>30초</span></div>
+                <button class="time-btn" data-src="image/templates/1280/15.png" data-name="1280 - 15초" data-rolw="450" data-rolh="50" data-roly="122">15초</button>
+                <button class="time-btn" data-src="image/templates/1280/20.png" data-name="1280 - 20초" data-rolw="450" data-rolh="50" data-roly="122">20초</button>
+                <button class="time-btn" data-src="image/templates/1280/30.png" data-name="1280 - 30초" data-rolw="450" data-rolh="50" data-roly="122">30초</button>
 
-                <!-- 1600 해상도 -->
                 <p class="grid-label">1600×1024 / 1600×900</p>
-                <div class="template-item" data-src="image/templates/1600/7.png" data-name="1600 - 7초" data-rolw="600" data-rolh="60" data-roly="145"><img src="image/templates/1600/7.png" alt="7초"><span>7초</span></div>
-                <div class="template-item" data-src="image/templates/1600/10.png" data-name="1600 - 10초" data-rolw="600" data-rolh="60" data-roly="145"><img src="image/templates/1600/10.png" alt="10초"><span>10초</span></div>
-                <div class="template-item" data-src="image/templates/1600/15.png" data-name="1600 - 15초" data-rolw="600" data-rolh="60" data-roly="145"><img src="image/templates/1600/15.png" alt="15초"><span>15초</span></div>
-                <div class="template-item" data-src="image/templates/1600/20.png" data-name="1600 - 20초" data-rolw="600" data-rolh="60" data-roly="145"><img src="image/templates/1600/20.png" alt="20초"><span>20초</span></div>
-                <div class="template-item" data-src="image/templates/1600/25.png" data-name="1600 - 25초" data-rolw="600" data-rolh="60" data-roly="145"><img src="image/templates/1600/25.png" alt="25초"><span>25초</span></div>
-                <div class="template-item" data-src="image/templates/1600/30.png" data-name="1600 - 30초" data-rolw="600" data-rolh="60" data-roly="145"><img src="image/templates/1600/30.png" alt="30초"><span>30초</span></div>
+                <button class="time-btn" data-src="image/templates/1600/7.png" data-name="1600 - 7초" data-rolw="600" data-rolh="60" data-roly="145">7초</button>
+                <button class="time-btn" data-src="image/templates/1600/10.png" data-name="1600 - 10초" data-rolw="600" data-rolh="60" data-roly="145">10초</button>
+                <button class="time-btn" data-src="image/templates/1600/15.png" data-name="1600 - 15초" data-rolw="600" data-rolh="60" data-roly="145">15초</button>
+                <button class="time-btn" data-src="image/templates/1600/20.png" data-name="1600 - 20초" data-rolw="600" data-rolh="60" data-roly="145">20초</button>
+                <button class="time-btn" data-src="image/templates/1600/25.png" data-name="1600 - 25초" data-rolw="600" data-rolh="60" data-roly="145">25초</button>
+                <button class="time-btn" data-src="image/templates/1600/30.png" data-name="1600 - 30초" data-rolw="600" data-rolh="60" data-roly="145">30초</button>
 
-                <!-- 1920 해상도 -->
                 <p class="grid-label">1920×1200 / 1920×1080</p>
-                <div class="template-item" data-src="image/templates/1920/15.png" data-name="1920 - 15초" data-rolw="700" data-rolh="73" data-roly="165"><img src="image/templates/1920/15.png" alt="15초"><span>15초</span></div>
-                <div class="template-item" data-src="image/templates/1920/20.png" data-name="1920 - 20초" data-rolw="700" data-rolh="73" data-roly="165"><img src="image/templates/1920/20.png" alt="20초"><span>20초</span></div>
-                <div class="template-item" data-src="image/templates/1920/25.png" data-name="1920 - 25초" data-rolw="700" data-rolh="73" data-roly="165"><img src="image/templates/1920/25.png" alt="25초"><span>25초</span></div>
-                <div class="template-item" data-src="image/templates/1920/30.png" data-name="1920 - 30초" data-rolw="700" data-rolh="73" data-roly="165"><img src="image/templates/1920/30.png" alt="30초"><span>30초</span></div>
+                <button class="time-btn" data-src="image/templates/1920/15.png" data-name="1920 - 15초" data-rolw="700" data-rolh="73" data-roly="165">15초</button>
+                <button class="time-btn" data-src="image/templates/1920/20.png" data-name="1920 - 20초" data-rolw="700" data-rolh="73" data-roly="165">20초</button>
+                <button class="time-btn" data-src="image/templates/1920/25.png" data-name="1920 - 25초" data-rolw="700" data-rolh="73" data-roly="165">25초</button>
+                <button class="time-btn" data-src="image/templates/1920/30.png" data-name="1920 - 30초" data-rolw="700" data-rolh="73" data-roly="165">30초</button>
             </div>
         </section>
 
-        <!-- 2단계: 화면 공유 + 탐지 -->
+        <!-- 2. 사운드 설정 -->
         <section class="panel">
-            <h2>2. 화면 공유 및 탐지</h2>
+            <h2>🔊 알림 사운드</h2>
+            <div class="sound-settings">
+                <div class="sound-select">
+                    <label for="soundSelect">사운드:</label>
+                    <select id="soundSelect">
+                        <option value="sounds/alert.mp3">기본 알림</option>
+                        <option value="sounds/bell.wav">벨</option>
+                        <option value="sounds/warning.wav">경고음</option>
+                        <option value="sounds/chime.wav">차임</option>
+                    </select>
+                    <button id="soundTestBtn" class="btn btn-secondary btn-sm">▶ 테스트</button>
+                </div>
+                <div class="volume-control">
+                    <label for="volumeSlider">볼륨:</label>
+                    <input type="range" id="volumeSlider" min="0" max="100" value="80" step="5">
+                    <span id="volumeValue">80%</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. 화면 공유 + 탐지 -->
+        <section class="panel">
+            <h2>3. 화면 공유 및 탐지</h2>
             <div class="controls">
                 <button id="startShareBtn" class="btn btn-primary">🖥️ 화면 공유</button>
                 <button id="stopShareBtn" class="btn btn-secondary" disabled>⏹️ 공유 중지</button>
                 <button id="startDetectBtn" class="btn btn-success" disabled>🔍 탐지 시작</button>
                 <button id="stopDetectBtn" class="btn btn-secondary" disabled>⏸️ 탐지 중지</button>
-                <button id="togglePipBtn" class="btn btn-pip" aria-pressed="false">📺 PIP 모드</button>
             </div>
-
             <div class="status-bar">
                 <div class="status-item">
                     <span class="label">실행 상태</span>
@@ -73,14 +89,14 @@
             </div>
         </section>
 
-        <!-- 프리뷰: 버프 영역만 표시 -->
+        <!-- 프리뷰 -->
         <section class="panel preview-panel">
             <h2>📺 버프 영역 프리뷰</h2>
             <div class="preview-wrapper roi-preview">
                 <canvas id="previewCanvas"></canvas>
                 <div id="previewPlaceholder" class="preview-placeholder">
                     <span class="icon">📡</span>
-                    <p>화면 공유 + 템플릿 선택 시 버프 영역이 표시됩니다</p>
+                    <p>화면 공유 + 알림 시간 선택 시 표시됩니다</p>
                 </div>
             </div>
         </section>
@@ -93,15 +109,13 @@
 
     <canvas id="canvas" style="display:none;"></canvas>
     <div id="flashOverlay" class="flash-overlay" style="display:none;"></div>
-
-    <audio id="alertSound" src="alert.mp3" preload="auto"></audio>
+    <audio id="alertSound" preload="auto"></audio>
 
     <script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="window.__opencvReady=true"></script>
     <script src="js/storage.js"></script>
     <script src="js/notifier.js"></script>
     <script src="js/capture.js"></script>
     <script src="js/detector.js"></script>
-    <script src="js/pip.js"></script>
     <script src="js/timer.js"></script>
     <script src="js/app.js"></script>
 </body>

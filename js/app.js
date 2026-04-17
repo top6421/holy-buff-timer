@@ -8,17 +8,49 @@
         const ids = [
             'startShareBtn', 'stopShareBtn',
             'startDetectBtn', 'stopDetectBtn',
-            'togglePipBtn',
             'status', 'currentTemplateName',
             'preview', 'previewPlaceholder', 'previewCanvas',
             'templateGrid', 'alertSound',
+            'soundSelect', 'soundTestBtn', 'volumeSlider', 'volumeValue',
         ];
         for (const id of ids) els[id] = document.getElementById(id);
     }
 
+    function setStatus(text) {
+        if (els.status) els.status.textContent = text;
+    }
+
+    function getAudio() {
+        return els.alertSound;
+    }
+
+    function applyVolume() {
+        const audio = getAudio();
+        if (!audio || !els.volumeSlider) return;
+        audio.volume = parseInt(els.volumeSlider.value, 10) / 100;
+    }
+
     async function initModules() {
-        // 저장된 템플릿 복원
         const saved = Storage.load();
+
+        // 사운드 설정 복원
+        if (saved) {
+            if (saved.soundSrc && els.soundSelect) els.soundSelect.value = saved.soundSrc;
+            if (typeof saved.volume === 'number' && els.volumeSlider) {
+                els.volumeSlider.value = String(saved.volume);
+            }
+        }
+        // 오디오 소스 설정
+        const audio = getAudio();
+        if (audio && els.soundSelect) {
+            audio.src = els.soundSelect.value;
+        }
+        applyVolume();
+        if (els.volumeValue && els.volumeSlider) {
+            els.volumeValue.textContent = els.volumeSlider.value + '%';
+        }
+
+        // 저장된 템플릿 복원
         if (saved && saved.templateSrc && saved.templateName) {
             await selectTemplate(saved.templateSrc, saved.templateName,
                 saved.roiWidth, saved.roiHeight, saved.roiY);
@@ -31,18 +63,9 @@
         if (!ok) {
             setStatus('⚠️ OpenCV 로드 실패');
         }
-
-        if (els.togglePipBtn && !PIP.isSupported()) {
-            els.togglePipBtn.disabled = true;
-            els.togglePipBtn.title = 'PIP 미지원 브라우저';
-        }
     }
 
-    function setStatus(text) {
-        if (els.status) els.status.textContent = text;
-    }
-
-    // 템플릿 선택 처리
+    // 템플릿 선택
     async function selectTemplate(src, name, rolw, rolh, roly) {
         const ok = await Detector.loadTemplate(src);
         if (!ok) {
@@ -53,29 +76,54 @@
         Detector.setROI(currentROI);
         if (els.currentTemplateName) els.currentTemplateName.textContent = name;
 
-        // 저장
-        Storage.save({ templateSrc: src, templateName: name,
+        // 저장 (기존 설정 보존)
+        const prev = Storage.load() || {};
+        Storage.save({ ...prev, templateSrc: src, templateName: name,
                        roiWidth: rolw, roiHeight: rolh, roiY: roly });
 
-        // 선택 시각 표시
-        document.querySelectorAll('.template-item').forEach(el => el.classList.remove('selected'));
-        const matched = document.querySelector(`.template-item[data-src="${src}"]`);
+        // 선택 표시
+        document.querySelectorAll('.time-btn').forEach(el => el.classList.remove('selected'));
+        const matched = document.querySelector(`.time-btn[data-src="${src}"]`);
         if (matched) matched.classList.add('selected');
 
-        console.info('[App] 템플릿 선택:', name);
         return true;
     }
 
     function wireTemplateGrid() {
         els.templateGrid?.addEventListener('click', async (e) => {
-            const item = e.target.closest('.template-item');
-            if (!item) return;
-            const { src, name, rolw, rolh, roly } = item.dataset;
+            const btn = e.target.closest('.time-btn');
+            if (!btn) return;
+            const { src, name, rolw, rolh, roly } = btn.dataset;
             await selectTemplate(src, name, rolw, rolh, roly);
         });
     }
 
-    // 버프 영역만 캔버스에 표시하는 프리뷰 루프
+    function wireSound() {
+        els.soundSelect?.addEventListener('change', () => {
+            const audio = getAudio();
+            if (audio) audio.src = els.soundSelect.value;
+            const prev = Storage.load() || {};
+            Storage.save({ ...prev, soundSrc: els.soundSelect.value });
+        });
+
+        els.volumeSlider?.addEventListener('input', () => {
+            const v = parseInt(els.volumeSlider.value, 10);
+            if (els.volumeValue) els.volumeValue.textContent = v + '%';
+            applyVolume();
+            const prev = Storage.load() || {};
+            Storage.save({ ...prev, volume: v });
+        });
+
+        els.soundTestBtn?.addEventListener('click', () => {
+            const audio = getAudio();
+            if (!audio) return;
+            applyVolume();
+            audio.currentTime = 0;
+            audio.play().catch(() => {});
+        });
+    }
+
+    // ROI 프리뷰 루프
     function startPreviewLoop() {
         stopPreviewLoop();
         const video = els.preview;
@@ -140,7 +188,6 @@
         Capture.on('shareStop', () => {
             stopPreviewLoop();
             try { Timer.stop(); } catch (_) {}
-            try { PIP.close(); } catch (_) {}
             setStatus('🔴 대기 중');
             els.previewPlaceholder?.classList.remove('hidden');
             if (els.preview) els.preview.srcObject = null;
@@ -154,7 +201,7 @@
     function wireDetect() {
         els.startDetectBtn?.addEventListener('click', () => {
             if (!Detector.isReady()) {
-                setStatus('⚠️ 템플릿을 먼저 선택하세요');
+                setStatus('⚠️ 알림 시간을 먼저 선택하세요');
                 return;
             }
             Timer.start();
@@ -171,42 +218,12 @@
         });
 
         Timer.on('matched', ({ score }) => {
-            console.info('[App] 매칭 성공', (score * 100).toFixed(2) + '%');
-            // alertSound 재생 (notifier와 별개로 mp3도 재생)
-            const audio = els.alertSound;
+            console.info('[App] 매칭!', (score * 100).toFixed(2) + '%');
+            const audio = getAudio();
             if (audio) {
+                applyVolume();
                 audio.currentTime = 0;
                 audio.play().catch(() => {});
-            }
-        });
-
-        // PIP 업데이트는 간단히 (Timer.on('tick'))
-        Timer.on('tick', ({ score, matched }) => {
-            if (PIP.isOpen()) {
-                PIP.update({
-                    state: matched ? 'MATCHED' : 'DETECTING',
-                    remainingSec: 0,
-                    ocrSynced: false,
-                    alertSeconds: 0,
-                });
-            }
-        });
-    }
-
-    function wirePip() {
-        els.togglePipBtn?.addEventListener('click', async () => {
-            await PIP.toggle();
-        });
-        PIP.on('open', () => {
-            if (els.togglePipBtn) {
-                els.togglePipBtn.setAttribute('aria-pressed', 'true');
-                els.togglePipBtn.textContent = '📺 PIP 닫기';
-            }
-        });
-        PIP.on('close', () => {
-            if (els.togglePipBtn) {
-                els.togglePipBtn.setAttribute('aria-pressed', 'false');
-                els.togglePipBtn.textContent = '📺 PIP 모드';
             }
         });
     }
@@ -215,8 +232,8 @@
         initElements();
         await initModules();
         wireTemplateGrid();
+        wireSound();
         wireShare();
         wireDetect();
-        wirePip();
     });
 })();

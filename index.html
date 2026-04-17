@@ -11,64 +11,73 @@
         <header>
             <h1>🔔 홀리심볼 버프 타이머</h1>
             <p class="subtitle">자동 알림 · 무설치 · 100% 무료</p>
-            <p class="hint">게임 창을 공유하면 자동으로 홀리심볼 버프를 감지합니다</p>
         </header>
 
-        <section class="panel">
-            <div class="controls">
-                <button id="startShareBtn" class="btn btn-primary">
-                    🖥️ 화면 공유 시작
-                </button>
-                <button id="stopShareBtn" class="btn btn-secondary" disabled>
-                    ⏹️ 공유 중지
-                </button>
-                <button id="startDetectBtn" class="btn btn-success" disabled>
-                    🔍 탐지 시작
-                </button>
-                <button id="stopDetectBtn" class="btn btn-secondary" disabled>
-                    ⏸️ 탐지 중지
-                </button>
-                <button id="togglePipBtn" class="btn btn-pip" aria-pressed="false">
-                    📺 PIP 모드
-                </button>
-                <button id="toggleOverlayBtn" class="btn btn-secondary" aria-pressed="false">
-                    👁️ 영역 표시
-                </button>
-            </div>
+        <!-- 사용 방법 안내 (접이식) -->
+        <details class="panel guide-panel" open>
+            <summary>📋 사용 방법</summary>
+            <ol>
+                <li>아래에서 <strong>현재 게임 해상도</strong>에 맞는 알림 시간을 선택하세요</li>
+                <li><strong>화면 공유</strong> 버튼을 눌러 "MapleStory Worlds" 창을 선택하세요</li>
+                <li><strong>탐지 시작</strong> 버튼을 눌러 감지를 시작하세요</li>
+                <li>버프 잔여시간이 선택한 초에 도달하면 자동으로 알림이 울립니다</li>
+            </ol>
+            <p class="warn">⚠️ 메이플랜드 해상도 변경 후 창 크기를 변경하지 마세요</p>
+        </details>
 
-            <div class="settings-row">
-                <label class="setting-item" for="alertSeconds">
-                    <span class="label">알림 시간(초 전)</span>
-                    <input id="alertSeconds" type="number" min="1" max="60" value="5" step="1">
-                </label>
+        <!-- 1단계: 템플릿 선택 -->
+        <section class="panel">
+            <h2>1. 알림 시간 선택</h2>
+            <p class="current-template">선택된 알림: <strong id="currentTemplateName">없음</strong></p>
+            <div id="templateGrid" class="template-grid">
+                <!-- 1280 해상도 -->
+                <p class="grid-label">1280×800 / 1280×720</p>
+                <div class="template-item" data-src="image/templates/1280/15.png" data-name="1280 - 15초" data-rolw="450" data-rolh="50" data-roly="122"><img src="image/templates/1280/15.png" alt="15초"><span>15초</span></div>
+                <div class="template-item" data-src="image/templates/1280/20.png" data-name="1280 - 20초" data-rolw="450" data-rolh="50" data-roly="122"><img src="image/templates/1280/20.png" alt="20초"><span>20초</span></div>
+                <div class="template-item" data-src="image/templates/1280/30.png" data-name="1280 - 30초" data-rolw="450" data-rolh="50" data-roly="122"><img src="image/templates/1280/30.png" alt="30초"><span>30초</span></div>
+
+                <!-- 1600 해상도 -->
+                <p class="grid-label">1600×1024 / 1600×900</p>
+                <div class="template-item" data-src="image/templates/1600/7.png" data-name="1600 - 7초" data-rolw="600" data-rolh="60" data-roly="145"><img src="image/templates/1600/7.png" alt="7초"><span>7초</span></div>
+                <div class="template-item" data-src="image/templates/1600/10.png" data-name="1600 - 10초" data-rolw="600" data-rolh="60" data-roly="145"><img src="image/templates/1600/10.png" alt="10초"><span>10초</span></div>
+                <div class="template-item" data-src="image/templates/1600/15.png" data-name="1600 - 15초" data-rolw="600" data-rolh="60" data-roly="145"><img src="image/templates/1600/15.png" alt="15초"><span>15초</span></div>
+                <div class="template-item" data-src="image/templates/1600/20.png" data-name="1600 - 20초" data-rolw="600" data-rolh="60" data-roly="145"><img src="image/templates/1600/20.png" alt="20초"><span>20초</span></div>
+                <div class="template-item" data-src="image/templates/1600/25.png" data-name="1600 - 25초" data-rolw="600" data-rolh="60" data-roly="145"><img src="image/templates/1600/25.png" alt="25초"><span>25초</span></div>
+                <div class="template-item" data-src="image/templates/1600/30.png" data-name="1600 - 30초" data-rolw="600" data-rolh="60" data-roly="145"><img src="image/templates/1600/30.png" alt="30초"><span>30초</span></div>
+
+                <!-- 1920 해상도 -->
+                <p class="grid-label">1920×1200 / 1920×1080</p>
+                <div class="template-item" data-src="image/templates/1920/15.png" data-name="1920 - 15초" data-rolw="700" data-rolh="73" data-roly="165"><img src="image/templates/1920/15.png" alt="15초"><span>15초</span></div>
+                <div class="template-item" data-src="image/templates/1920/20.png" data-name="1920 - 20초" data-rolw="700" data-rolh="73" data-roly="165"><img src="image/templates/1920/20.png" alt="20초"><span>20초</span></div>
+                <div class="template-item" data-src="image/templates/1920/25.png" data-name="1920 - 25초" data-rolw="700" data-rolh="73" data-roly="165"><img src="image/templates/1920/25.png" alt="25초"><span>25초</span></div>
+                <div class="template-item" data-src="image/templates/1920/30.png" data-name="1920 - 30초" data-rolw="700" data-rolh="73" data-roly="165"><img src="image/templates/1920/30.png" alt="30초"><span>30초</span></div>
+            </div>
+        </section>
+
+        <!-- 2단계: 화면 공유 + 탐지 -->
+        <section class="panel">
+            <h2>2. 화면 공유 및 탐지</h2>
+            <div class="controls">
+                <button id="startShareBtn" class="btn btn-primary">🖥️ 화면 공유</button>
+                <button id="stopShareBtn" class="btn btn-secondary" disabled>⏹️ 공유 중지</button>
+                <button id="startDetectBtn" class="btn btn-success" disabled>🔍 탐지 시작</button>
+                <button id="stopDetectBtn" class="btn btn-secondary" disabled>⏸️ 탐지 중지</button>
+                <button id="togglePipBtn" class="btn btn-pip" aria-pressed="false">📺 PIP 모드</button>
             </div>
 
             <div class="status-bar">
                 <div class="status-item">
-                    <span class="label">공유 상태</span>
-                    <span id="shareStatus" class="value status-off">OFF</span>
+                    <span class="label">실행 상태</span>
+                    <span id="status" class="value status-off">🔴 대기 중</span>
                 </div>
-                <div class="status-item">
-                    <span class="label">탐지 상태</span>
-                    <span id="detectStatus" class="value state-idle">IDLE</span>
-                </div>
-            </div>
-
-            <div class="remaining-box" aria-label="잔여 시간">
-                <span class="remaining-label">잔여 시간</span>
-                <span id="remainingTime" class="remaining-value">--:--</span>
-            </div>
-
-            <div class="progress-wrapper" aria-label="잔여시간 프로그레스">
-                <div id="progressBar" class="progress-bar level-high" style="width: 0%"></div>
             </div>
         </section>
 
+        <!-- 프리뷰 (작게) -->
         <section class="panel preview-panel">
             <h2>📺 프리뷰</h2>
             <div class="preview-wrapper">
                 <video id="preview" autoplay muted playsinline></video>
-                <canvas id="overlayCanvas" class="overlay-canvas"></canvas>
                 <div id="previewPlaceholder" class="preview-placeholder">
                     <span class="icon">📡</span>
                     <p>화면 공유를 시작하면 여기에 표시됩니다</p>
@@ -77,22 +86,20 @@
         </section>
 
         <footer class="footer">
-            <a href="POLICY.md" class="btn btn-secondary" target="_blank" rel="noopener">📜 정책 보기</a>
-            <span class="footer-note">측정·알림 전용, 자동화 아님</span>
+            <span class="footer-note">측정·알림 전용 · 자동화 아님 · 게임 데이터 외부 전송 없음</span>
         </footer>
     </div>
 
-    <canvas id="analysisCanvas" style="display:none;"></canvas>
+    <canvas id="canvas" style="display:none;"></canvas>
     <div id="flashOverlay" class="flash-overlay" style="display:none;"></div>
 
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script async src="https://docs.opencv.org/4.x/opencv.js" onload="window.__opencvReady=true"></script>
+    <audio id="alertSound" src="alert.mp3" preload="auto"></audio>
+
+    <script src="https://docs.opencv.org/4.8.0/opencv.js" type="text/javascript"></script>
     <script src="js/storage.js"></script>
     <script src="js/notifier.js"></script>
     <script src="js/capture.js"></script>
     <script src="js/detector.js"></script>
-    <script src="js/ocr.js"></script>
-    <script src="js/overlay.js"></script>
     <script src="js/pip.js"></script>
     <script src="js/timer.js"></script>
     <script src="js/app.js"></script>

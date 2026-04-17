@@ -1,6 +1,8 @@
 (function () {
     const els = {};
     let detectorReady = false;
+    let currentROI = null;
+    let previewRAF = null;
 
     function initElements() {
         const ids = [
@@ -8,7 +10,7 @@
             'startDetectBtn', 'stopDetectBtn',
             'togglePipBtn',
             'status', 'currentTemplateName',
-            'preview', 'previewPlaceholder',
+            'preview', 'previewPlaceholder', 'previewCanvas',
             'templateGrid', 'alertSound',
         ];
         for (const id of ids) els[id] = document.getElementById(id);
@@ -47,7 +49,8 @@
             setStatus('⚠️ 템플릿 로드 실패');
             return false;
         }
-        Detector.setROI({ width: parseInt(rolw), height: parseInt(rolh), y: parseInt(roly) });
+        currentROI = { width: parseInt(rolw), height: parseInt(rolh), y: parseInt(roly) };
+        Detector.setROI(currentROI);
         if (els.currentTemplateName) els.currentTemplateName.textContent = name;
 
         // 저장
@@ -72,6 +75,46 @@
         });
     }
 
+    // 버프 영역만 캔버스에 표시하는 프리뷰 루프
+    function startPreviewLoop() {
+        stopPreviewLoop();
+        const video = els.preview;
+        const canvas = els.previewCanvas;
+        if (!video || !canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        function draw() {
+            if (!Capture.isSharing() || !currentROI) {
+                previewRAF = requestAnimationFrame(draw);
+                return;
+            }
+            const vw = video.videoWidth;
+            const vh = video.videoHeight;
+            if (vw === 0 || vh === 0) {
+                previewRAF = requestAnimationFrame(draw);
+                return;
+            }
+            const rx = Math.max(0, vw - currentROI.width);
+            const ry = Math.max(0, Math.min(currentROI.y, vh - 1));
+            const rw = Math.min(currentROI.width, vw - rx);
+            const rh = Math.min(currentROI.height, vh - ry);
+            if (canvas.width !== rw || canvas.height !== rh) {
+                canvas.width = rw;
+                canvas.height = rh;
+            }
+            ctx.drawImage(video, rx, ry, rw, rh, 0, 0, rw, rh);
+            previewRAF = requestAnimationFrame(draw);
+        }
+        previewRAF = requestAnimationFrame(draw);
+    }
+
+    function stopPreviewLoop() {
+        if (previewRAF) {
+            cancelAnimationFrame(previewRAF);
+            previewRAF = null;
+        }
+    }
+
     function wireShare() {
         els.startShareBtn?.addEventListener('click', async () => {
             try {
@@ -91,9 +134,11 @@
             if (detectorReady && Detector.isReady()) {
                 els.startDetectBtn.disabled = false;
             }
+            startPreviewLoop();
         });
 
         Capture.on('shareStop', () => {
+            stopPreviewLoop();
             try { Timer.stop(); } catch (_) {}
             try { PIP.close(); } catch (_) {}
             setStatus('🔴 대기 중');

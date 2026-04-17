@@ -253,9 +253,18 @@ header h1 {
     background: #000;
     border-radius: 8px;
     overflow: hidden;
-    aspect-ratio: 16 / 9;
-    max-height: 340px;
     margin: 0 auto;
+}
+
+.roi-preview {
+    max-width: 700px;
+    min-height: 60px;
+}
+
+.roi-preview canvas {
+    width: 100%;
+    display: block;
+    image-rendering: pixelated;
 }
 
 .preview-wrapper video {

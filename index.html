@@ -73,17 +73,18 @@
             </div>
         </section>
 
-        <!-- 프리뷰 (작게) -->
+        <!-- 프리뷰: 버프 영역만 표시 -->
         <section class="panel preview-panel">
-            <h2>📺 프리뷰</h2>
-            <div class="preview-wrapper">
-                <video id="preview" autoplay muted playsinline></video>
+            <h2>📺 버프 영역 프리뷰</h2>
+            <div class="preview-wrapper roi-preview">
+                <canvas id="previewCanvas"></canvas>
                 <div id="previewPlaceholder" class="preview-placeholder">
                     <span class="icon">📡</span>
-                    <p>화면 공유를 시작하면 여기에 표시됩니다</p>
+                    <p>화면 공유 + 템플릿 선택 시 버프 영역이 표시됩니다</p>
                 </div>
             </div>
         </section>
+        <video id="preview" autoplay muted playsinline style="display:none;"></video>
 
         <footer class="footer">
             <span class="footer-note">측정·알림 전용 · 자동화 아님 · 게임 데이터 외부 전송 없음</span>

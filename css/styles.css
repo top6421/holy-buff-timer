@@ -40,6 +40,12 @@ header h1 {
     font-weight: 500;
 }
 
+.version {
+    color: #64748b;
+    font-size: 0.8em;
+    margin-top: 6px;
+}
+
 .panel {
     background: rgba(30, 41, 59, 0.7);
     border: 1px solid rgba(148, 163, 184, 0.15);

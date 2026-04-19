@@ -11,6 +11,7 @@
         <header>
             <h1>🔔 홀리심볼 버프 타이머</h1>
             <p class="subtitle">자동 알림 · 무설치 · 100% 무료</p>
+            <p class="version">v2.0 — roly 300으로 수정</p>
         </header>
 
         <details class="panel guide-panel" open>
@@ -43,7 +44,7 @@
                 <button class="time-btn" data-src="image/templates/1600/30.png" data-name="1600 - 30초" data-rolw="600" data-rolh="60" data-roly="145">30초</button>
 
                 <p class="grid-label">맥북 (레티나)</p>
-                <button class="time-btn" data-src="image/templates/macbook/25.png" data-name="맥북 - 25초" data-rolw="800" data-rolh="140" data-roly="340">25초</button>
+                <button class="time-btn" data-src="image/templates/macbook/25.png" data-name="맥북 - 25초" data-rolw="800" data-rolh="140" data-roly="300">25초</button>
 
                 <p class="grid-label">1920×1200 / 1920×1080</p>
                 <button class="time-btn" data-src="image/templates/1920/15.png" data-name="1920 - 15초" data-rolw="700" data-rolh="73" data-roly="165">15초</button>
@@ -75,6 +76,26 @@
             </div>
         </section>
 
+        <!-- ROI 조정 (테스트용) -->
+        <section class="panel">
+            <h2>🔧 ROI 위치 조정 (테스트)</h2>
+            <div class="sound-settings">
+                <div class="sound-select">
+                    <label for="roiYInput">Y 좌표:</label>
+                    <input type="number" id="roiYInput" value="300" style="width:80px;padding:6px;background:rgba(15,23,42,0.8);border:1px solid rgba(148,163,184,0.3);border-radius:6px;color:#e2e8f0;font-family:inherit;">
+                </div>
+                <div class="sound-select">
+                    <label for="roiHInput">높이:</label>
+                    <input type="number" id="roiHInput" value="140" style="width:80px;padding:6px;background:rgba(15,23,42,0.8);border:1px solid rgba(148,163,184,0.3);border-radius:6px;color:#e2e8f0;font-family:inherit;">
+                </div>
+                <div class="sound-select">
+                    <label for="roiWInput">너비:</label>
+                    <input type="number" id="roiWInput" value="800" style="width:80px;padding:6px;background:rgba(15,23,42,0.8);border:1px solid rgba(148,163,184,0.3);border-radius:6px;color:#e2e8f0;font-family:inherit;">
+                </div>
+                <button id="applyRoiBtn" class="btn btn-primary btn-sm">적용</button>
+            </div>
+        </section>
+
         <!-- 3. 화면 공유 + 탐지 -->
         <section class="panel">
             <h2>3. 화면 공유 및 탐지</h2>
@@ -88,6 +109,10 @@
                 <div class="status-item">
                     <span class="label">실행 상태</span>
                     <span id="status" class="value status-off">🔴 대기 중</span>
+                </div>
+                <div class="status-item">
+                    <span class="label">매칭 점수</span>
+                    <span id="matchScore" class="value">—</span>
                 </div>
             </div>
         </section>

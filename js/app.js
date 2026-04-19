@@ -8,7 +8,7 @@
         const ids = [
             'startShareBtn', 'stopShareBtn',
             'startDetectBtn', 'stopDetectBtn',
-            'status', 'currentTemplateName',
+            'status', 'matchScore', 'currentTemplateName',
             'preview', 'previewPlaceholder', 'previewCanvas',
             'templateGrid', 'alertSound',
             'soundSelect', 'soundTestBtn', 'volumeSlider', 'volumeValue',
@@ -217,6 +217,12 @@
             setStatus('🔴 탐지 중지');
         });
 
+        Timer.on('tick', ({ score }) => {
+            if (els.matchScore) {
+                els.matchScore.textContent = typeof score === 'number' ? score.toFixed(4) : '—';
+            }
+        });
+
         Timer.on('matched', ({ score }) => {
             console.info('[App] 매칭!', (score * 100).toFixed(2) + '%');
             const audio = getAudio();
@@ -228,6 +234,23 @@
         });
     }
 
+    function wireROITest() {
+        const applyBtn = document.getElementById('applyRoiBtn');
+        const yInput = document.getElementById('roiYInput');
+        const hInput = document.getElementById('roiHInput');
+        const wInput = document.getElementById('roiWInput');
+        if (!applyBtn) return;
+
+        applyBtn.addEventListener('click', () => {
+            const y = parseInt(yInput.value, 10) || 300;
+            const h = parseInt(hInput.value, 10) || 140;
+            const w = parseInt(wInput.value, 10) || 800;
+            currentROI = { width: w, height: h, y: y };
+            Detector.setROI(currentROI);
+            console.info('[App] ROI 수동 적용:', currentROI);
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', async () => {
         initElements();
         await initModules();
@@ -235,5 +258,6 @@
         wireSound();
         wireShare();
         wireDetect();
+        wireROITest();
     });
 })();

@@ -30,6 +30,7 @@ const Timer = (function () {
             const frame = Capture.grabFrame();
             if (!frame) return;
             const result = Detector.detect(frame);
+            if (result.score > 0.5) console.log('[Timer] score:', result.score.toFixed(4));
             emit('tick', { score: result.score, matched: result.matched });
             if (result.matched && Date.now() - lastAlertTime >= CONFIG.ALERT_COOLDOWN_MS) {
                 try { Notifier.alertExpiring(); } catch (_) {}

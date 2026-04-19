@@ -1,55 +1,54 @@
 # 메이플랜드 버프 타이머 — 개발 스펙 문서
 
-> 최종 수정: 2026-04-14
+> 최종 수정: 2026-04-19
 > 참고: [POLICY.md](./POLICY.md) (정책 체크리스트)
 > 라이브: https://top6421.github.io/holy-buff-timer/
+> 리포: https://github.com/top6421/holy-buff-timer
 
 ---
 
 ## 1. 프로젝트 개요
 
 ### 목적
-메이플랜드(MapleStory Worlds 기반)에서 **홀리심볼 버프(2분 지속)**의 잔여시간을 실시간 감지하고, 만료 전 알림(기본 5초 전, 1~60초 사용자 설정)을 제공하는 웹 서비스.
+메이플랜드(MapleStory Worlds)에서 **홀리심볼 버프** 잔여시간이 특정 초에 도달했을 때 **자동 알림**을 제공하는 웹 서비스.
 
-### 해결하려는 문제
-- 버프 지속시간 체크 부담 (항상 시간 확인 어려움)
-- 만료 전 갱신해야 효율 유지 (놓치면 경험치 손실)
-- 여러 버프 갱신으로 **홀리심볼 아이콘 위치가 수시로 이동**
+### 핵심 동작 원리
+1. 사용자가 **해상도 + 알림 시간**(예: 1600 - 25초) 선택 → 해당 시점의 버프 아이콘 스냅샷을 템플릿으로 로드
+2. **화면 공유**(getDisplayMedia)로 게임 화면 캡처
+3. 화면 우측 ROI 영역에서 **500ms 간격**으로 `cv.matchTemplate` 실행
+4. 매칭 점수 ≥ 0.978 → **알림 사운드 재생** (3초 쿨다운)
 
 ### 참고 선례
-[aprud.me](https://aprud.me) — 동일 원리로 EXP/메소 측정기 운영 중, 제재 사례 0건
+- [kimdanjin.github.io/buff](https://kimdanjin.github.io/buff/) — 동일 원리, 본 프로젝트의 기반 참조
+- [aprud.me](https://aprud.me) — 화면공유 기반 EXP 측정기
 
 ---
 
-## 2. 정책 준수 (필수)
+## 2. 정책 준수
 
 상세: [POLICY.md](./POLICY.md)
 
-### 절대 지켜야 할 원칙
-- ✅ **화면공유(getDisplayMedia) 픽셀 분석만** 사용
-- ✅ **브라우저 로컬 처리**만, 외부 서버 전송 금지
-- ✅ **읽기 전용** — 게임 클라이언트/메모리/패킷 접근 금지
-- ❌ 키보드/마우스 자동 입력 금지 (**매크로성 자동화는 확실한 제재**)
-- ❌ 게임 창 위 오버레이 직접 렌더링 금지 (PIP 별도 창은 OK)
+- ✅ **화면공유 픽셀 분석만** 사용 (게임 클라이언트/메모리/패킷 접근 없음)
+- ✅ **브라우저 로컬 처리**만 (외부 서버 전송 0건)
+- ✅ **읽기 전용** (게임에 입력 전송 없음, 매크로 아님)
+- ✅ 물리적 스톱워치와 동일 위상 — "측정·알림 전용, 자동화 아님"
 
 ---
 
 ## 3. 기술 스택
 
-### 프론트엔드 (Vanilla JS + CDN 라이브러리)
 | 구성 | 용도 |
 |---|---|
 | **Vanilla JavaScript (IIFE 모듈 패턴)** | 프레임워크 없이 모듈화 |
 | **getDisplayMedia API** | 화면 캡처 |
-| **MediaRecorder API** | 녹화 (디버깅 도구) |
-| **OpenCV.js 4.x** | 템플릿 매칭 (아이콘 위치 탐지) |
-| **Tesseract.js v5** | 잔여시간 숫자 OCR |
-| **Web Audio API** | 만료 임박 비프 알림 |
+| **OpenCV.js 4.8.0** | 템플릿 매칭 (`TM_CCOEFF_NORMED`) |
+| **Web Audio API** | 비프 알림 |
 | **Notification API** | 브라우저 알림 |
-| **LocalStorage** | ROI 좌표·알림시간 설정 저장 |
+| **LocalStorage** | 설정 저장/복원 |
+| **`<audio>` 요소** | MP3/WAV 알림 사운드 재생 |
 
 ### 외부 서비스
-- 없음 (모든 처리 클라이언트 로컬)
+- 없음 (100% 클라이언트 사이드)
 
 ### 배포
 - GitHub Pages (https://top6421.github.io/holy-buff-timer/)
@@ -58,155 +57,92 @@
 
 ## 4. 탐지 알고리즘
 
-### 4.1 3단계 하이브리드 검출
+### 4.1 흐름
 
 ```
-[1] 초기 캘리브레이션 (전체 화면 스캔, 1초 주기)
-      ↓ 아이콘 발견 (3회 연속)
-[2] ROI 자동 설정 (화면 우측 끝 고정, X 크게 / Y 타이트)
-      ↓
-[3] ROI 내 템플릿 매칭 (1초 주기, 고정 스케일)
-      ↓
-[4] 매칭점수·아이콘 밝기로 갱신 감지
-      ↓
-[5] 잔여 ≤ 60초 구간에서 OCR로 카운트다운 동기화
-      ↓
-[6] 잔여 ≤ 알림시간 → 알림 발동
+[1] 사용자가 해상도 + 알림 시간 선택 → 템플릿 이미지 로드 + ROI 설정
+[2] 화면 공유 시작 → 게임 창 캡처
+[3] 500ms 간격으로:
+    - 전체 프레임에서 ROI 영역(화면 우측) 크롭
+    - cv.matchTemplate(roi, template, TM_CCOEFF_NORMED)
+    - maxVal ≥ 0.978 → 알림 발동 (3초 쿨다운)
 ```
 
-### 4.2 템플릿 매칭 파라미터
+### 4.2 템플릿 매칭
 
-| 항목 | 값 | 근거 |
-|---|---|---|
-| **템플릿 이미지** | `image/reference/icon.png` (32×32 RGBA) | 실제 게임 에셋, 영상 간 일반화 우수 |
-| **매칭 알고리즘** | `TM_CCOEFF_NORMED` | OpenCV 표준 정규화 상관 |
-| **매칭 임계값** | **0.45** | 회색 진행 시 최저 0.547 + 여유 |
-| **초기 스캔 스케일 범위** | **0.5 ~ 4.5 (0.25 step, 17단계)** | DPI/해상도 차이 자동 적응 (비레티나 ~레티나) |
-| **TRACKING 스케일** | 초기 감지된 스케일 고정 | ROI 스캔 속도 최적화 |
-| **템플릿 알파 합성** | 흰색 배경으로 플래튼 | 게임 아이콘 프레임이 흰색 |
-| **최소 유효 템플릿 폭** | 20px | 20px 미만은 매칭 품질 급락 |
+| 항목 | 값 |
+|---|---|
+| 알고리즘 | `TM_CCOEFF_NORMED` |
+| 임계값 | **0.978** (98% 일치) |
+| 간격 | 500ms |
+| 알림 쿨다운 | 3000ms |
 
-### 4.3 ROI 자동 설정 — **우측 끝 고정 전략**
+### 4.3 ROI (탐색 영역)
 
-버프 아이콘 UI는 **화면 오른쪽에서 왼쪽으로 쌓이는** 구조. 새 버프가 추가되면 홀리심볼은 좌측으로 밀리지만, **우측 끝은 항상 화면 우측**이다. 따라서 ROI를 우측 끝 기준으로 고정하면 버프 개수가 바뀌어도 ROI 재설정이 불필요.
+화면 우측 끝에서 고정 크기로 크롭. 해상도별 사전 정의:
 
-```js
-// X축: 화면 우측 끝에서 고정 오프셋, 좌로 프레임 너비의 35% 확장
-const x1 = frameWidth - ROI_RIGHT_PAD_PX;               // 10px 여유
-const x0 = Math.max(0, x1 - frameWidth * ROI_WIDTH_RATIO); // 35%
-
-// Y축: 감지된 아이콘 위치 기준 타이트 (드리프트만 허용)
-const y0 = max(0, detectedY - ROI_PAD_Y_PX);
-const y1 = min(H, detectedY + iconH + ROI_PAD_Y_PX);
+```
+ROI.x = videoWidth - ROI.width   (우측 끝 기준)
+ROI.y = 해상도별 고정값
+ROI.width, ROI.height = 해상도별 고정값
 ```
 
-| 상수 | 값 | 비고 |
-|---|---|---|
-| `ROI_WIDTH_RATIO` | **0.35** | 기존 0.55에서 축소 (버프바는 우측 협소 영역에만 존재) |
-| `ROI_RIGHT_PAD_PX` | 10 | 화면 우측 끝 여유 |
-| `ROI_PAD_Y_PX` | 20 | Y축 상하 여유 |
+| 해상도 | ROI 너비 | ROI 높이 | ROI Y좌표 |
+|---|---|---|---|
+| 1280×800/720 | 450 | 50 | 122 |
+| 1600×1024/900 | 600 | 60 | 145 |
+| 1920×1200/1080 | 700 | 73 | 165 |
+| 맥북 레티나 | 800 | 140 | 300 |
 
-### 4.4 아이콘 밝기 측정
-
-카운트다운 진행에 따라 아이콘 위에 회색 오버레이가 점진적으로 깔림 → 평균 밝기 감소.
-
-```js
-// 표준 luminance (0.299R + 0.587G + 0.114B)
-// 2픽셀 step 샘플링으로 성능 확보
-measureBrightness(imageData, loc, size) → [0, 255]
-```
-
-### 4.5 성능 측정값
+### 4.4 성능
 
 | 연산 | 시간 |
 |---|---|
-| 초기 전체 스캔 (17개 스케일) | ~4000ms (1회) |
-| ROI 스캔 (고정 스케일) | ~7ms |
-| 밝기 측정 (2px step) | <1ms |
-| OCR (Tesseract Worker 재사용) | ~200ms |
-| 전체 루프 주기 | 1초 |
+| ROI 크롭 + matchTemplate | ~5-10ms |
+| 재사용 Canvas/Mat | 메모리 누수 방지 |
+| OpenCV 초기 로드 | ~5-10초 (CDN) |
 
 ---
 
-## 5. OCR 기반 카운트다운
+## 5. 템플릿 이미지
 
-### 5.1 게임 UI 관찰
+해상도별로 "특정 초수 남았을 때의 버프 아이콘 스크린샷"을 미리 준비.
+매칭 시 해당 이미지가 화면에 보이면 알림 발동.
 
-- 버프 아이콘은 **잔여 < 60초**일 때만 **주황·노랑·빨강** 카운트다운 숫자를 아이콘 위에 표시.
-- 60초 초과 구간에는 숫자 없음 (단, 작은 흰색 "1"은 아이템 스택 표기 — 타이머 아님, 흰색이라 색상 마스크로 자동 배제됨).
-- 따라서 내부 상태는 **2단계**:
-  1. **TRACKING · 대기 중** — 아이콘은 감지됐으나 OCR이 유효 숫자(1~59)를 아직 못 읽음
-  2. **TRACKING · 카운트다운** — OCR 동기화 후 내부 시계로 카운트다운
-
-### 5.2 OCR 영역
-
-아이콘 좌하단 55%×55% 영역을 크롭:
-
-```js
-sx = loc.x
-sy = loc.y + size.h * 0.45
-sw = size.w * 0.55
-sh = size.h * 0.55
-```
-
-### 5.3 전처리 파이프라인 (`OCR.preprocForTimerOcr`)
-
-1. **HSV 색상 마스크** — 카운트다운 색만 남기고 나머지를 흰색으로
-   - 빨강/주황: `H ≤ 25 || H ≥ 160`, `S ≥ 100`, `V ≥ 100`
-   - 노랑: `15 ≤ H ≤ 35`, `S ≥ 100`, `V ≥ 100`
-   - H 범위는 OpenCV 관례(0~179)
-2. **3× 업스케일** (`imageSmoothingQuality: 'high'`, cubic)
-3. **20px 흰색 패딩** (Tesseract 경계 여유)
-4. **Tesseract 파라미터**:
-   - PSM 8 (`SINGLE_WORD`)
-   - `classify_bln_numeric_mode=1`
-   - `tessedit_char_whitelist='0123456789'`
-
-### 5.4 검증 성능
-- 카운트다운 표시 구간: **5/5 완벽 인식**
-- 미표시 구간(60초 초과): **10/10 공백 반환** (오인식 0)
-
-### 5.5 동기화 로직 (`Timer.tryOcrRead`)
+### 보유 템플릿
 
 ```
-숫자 n 읽음 (1 ≤ n ≤ 59, confidence ≥ 30)
-  ↓
-if !ocrSynced:
-  if n ≥ OCR_SYNC_FAST_MIN (50):
-    → 1회 읽어도 즉시 sync (50~59 구간은 오탐 가능성 매우 낮음)
-  else:
-    → 연속 단조 감소 2회 확인 후 sync
-  sync 완료 시:
-    remainingSec = n
-    startTime = now - (BUFF_DURATION - n) * 1000
-else:  # 동기화 이후 보정
-  diff = n - remainingSec
-  if diff ≥ OCR_REFRESH_JUMP_MIN (+10): 갱신으로 간주
-  elif -4 ≤ diff ≤ +1: 시계 보정
-  else: 무시
+image/templates/
+├── 1280/     15초, 20초, 30초
+├── 1600/     7초, 10초, 15초, 20초, 25초, 30초
+├── 1920/     15초, 20초, 25초, 30초
+└── macbook/  25초
 ```
+
+### 템플릿 추가 방법
+1. 해당 해상도로 게임 실행
+2. 원하는 초수 남았을 때 스크린샷 (버프 아이콘만 크롭, ~50-100px)
+3. `image/templates/{해상도}/{초수}.png` 로 저장
+4. `index.html`에 `<button class="time-btn" data-src="..." ...>` 추가
 
 ---
 
-## 6. 갱신 감지 (3중 지표)
+## 6. 사운드 시스템
 
-매 TRACKING 틱마다 아래 지표 중 **하나라도** 만족 시 갱신으로 간주하고 타이머 리셋 + OCR 재동기화 대기 상태로 전환.
+### 알림 사운드 4종
 
-| # | 지표 | 임계 | 상수 |
-|---|---|---|---|
-| 1 | **매칭 점수 스파이크** — 최근 평균 대비 상승 | +0.06 이상 | `REFRESH_SCORE_DELTA` |
-| 2 | **아이콘 평균 밝기 스파이크** — 최근 평균 대비 상승 | +10 이상 | `REFRESH_BRIGHTNESS_DELTA` |
-| 3 | **밝기 초기값 복귀** — 현재/초기 비율 | ≥ 0.92 & 직전 평균은 낮은 상태 | `REFRESH_BRIGHTNESS_RATIO` |
-| 4 | **OCR 값 급등** — 동기화 후 보정용 | +10초 이상 | `OCR_REFRESH_JUMP_MIN` |
+| 파일 | 설명 |
+|---|---|
+| `sounds/alert.mp3` | 기본 알림 |
+| `sounds/bell.wav` | 벨 (880+1320Hz) |
+| `sounds/warning.wav` | 경고음 (440Hz 2연타) |
+| `sounds/chime.wav` | 차임 (523+659+784Hz 화음) |
 
-### 오발동 방지 가드
-- 최소 경과 시간: **3초** (`REFRESH_MIN_ELAPSED_SEC`)
-- 쿨다운: **3초** (`REFRESH_COOLDOWN_MS`)
-- 스코어/밝기 버퍼: 최근 3틱 평균 기준 (`SCORE_BUFFER_SIZE`, `BRIGHTNESS_BUFFER_SIZE`)
-- `REFRESH_DEBUG=true` 시 매 틱 로그 출력
-
-### 백업: 수동 갱신
-자동 감지가 놓칠 경우를 대비해 `🔄 갱신` 버튼 + **Space 단축키** 제공 (`Timer.manualRefresh()`).
+### 사용자 설정
+- **사운드 선택**: 드롭다운
+- **볼륨 조절**: 0~100% 슬라이더
+- **테스트 버튼**: 선택한 사운드 미리 듣기
+- 모든 설정 LocalStorage 자동 저장/복원
 
 ---
 
@@ -215,43 +151,32 @@ else:  # 동기화 이후 보정
 ```
 sim/
 ├── index.html
-├── css/
-│   └── styles.css
+├── css/styles.css
 ├── js/
-│   ├── app.js           # 메인 컨트롤러 (UI 이벤트 와이어링)
+│   ├── app.js           # 메인 컨트롤러 (UI 이벤트, 모듈 통합)
 │   ├── capture.js       # getDisplayMedia + 프레임 추출
-│   ├── detector.js      # OpenCV 템플릿매칭 + ROI + 밝기 측정
-│   ├── ocr.js           # Tesseract Worker + HSV 전처리
-│   ├── timer.js         # 상태 머신 + 카운트다운 + 갱신 감지
-│   ├── overlay.js       # 프리뷰 위 아이콘/ROI 시각화
-│   ├── notifier.js      # Web Audio / Notification / 플래시 / 진동
-│   ├── storage.js       # LocalStorage (ROI, 알림시간)
-│   └── recorder.js      # 디버깅용 녹화 도구
-├── image/
-│   ├── reference/icon.png      # 32×32 RGBA 템플릿
-│   └── labeled/                # 15개 라벨 이미지 (OCR/시각 검증용)
-├── recording/           # 테스트 영상 (git 제외)
+│   ├── detector.js      # OpenCV 템플릿 매칭 + ROI
+│   ├── notifier.js      # Web Audio / Notification / 플래시
+│   ├── storage.js       # LocalStorage
+│   └── timer.js         # 500ms 감지 루프
+├── sounds/              # 알림 사운드 4종
+├── image/templates/     # 해상도별 템플릿 이미지
 ├── POLICY.md
 ├── SPEC.md
 └── README.md
 ```
 
-### 모듈 공개 API 요약
+### 모듈 공개 API
 
 ```js
 Capture:   { on, startShare, stopShare, grabFrame, grabFrameCanvas,
              getVideoSize, getStream, isSharing }
 
-Detector:  { init, scanFullFrame, scanROI, computeROI,
-             measureBrightness, getConfig, isReady }
+Detector:  { init, loadTemplate, setROI, detect, isReady,
+             getMatchThreshold, setMatchThreshold }
 
-OCR:       { init, readNumber, terminate, isReady, preprocForTimerOcr }
-
-Timer:     { on, start, stop, rescan, manualRefresh,
-             setAlertThreshold, getConfig, getStatus }
-           events: stateChange, tick, detect, sync, alert, expired, refreshed
-
-Overlay:   { init, setEnabled, isEnabled, update, clear }
+Timer:     { on, start, stop, isRunning }
+           events: start, stop, matched, tick
 
 Notifier:  { init, beep, notify, flash, alertExpiring }
 
@@ -260,183 +185,91 @@ Storage:   { save, load, saveROI, loadROI, clear }
 
 ---
 
-## 8. 상태 머신
+## 8. UI / UX
 
-```
-IDLE
-  ↓ "화면 공유 시작" → "탐지 시작"
-SCANNING                                (전체 화면 템플릿매칭)
-  ↓ 3회 연속 감지 (CONSECUTIVE_DETECT_REQUIRED)
-TRACKING · 대기 중                      (OCR 동기화 전, 시간란 "대기 중...")
-  ↓ OCR이 50~59 1회 읽음 (FAST)
-  ↓ 또는 1~49 구간 연속 단조감소 2회
-TRACKING · 카운트다운                   (내부 시계로 초 단위 감소)
-  │ ├─ 매 틱 OCR 보정 (±1초 수준)
-  │ ├─ 갱신 감지 시 → 대기 중으로 복귀
-  │ ├─ ROI 내 매칭 10회 연속 실패 → SCANNING 복귀
-  │ └─ 잔여 ≤ 알림시간 & 미알림
-  ↓
-ALERTING                                (비프·알림·플래시·진동)
-  ↓ 즉시 복귀
-TRACKING · 카운트다운
-  ↓ remainingSec = 0
-expired 이벤트 → TRACKING 유지 (갱신 대기)
-```
+### 페이지 구성 (상단→하단)
 
----
+1. **헤더**: 제목 + 부제 + 버전
+2. **사용 방법** (접이식): 3단계 안내 + 주의사항
+3. **알림 시간 선택**: 해상도별 시간 버튼 그리드 (선택 시 초록 강조)
+4. **사운드 설정**: 사운드 선택 + 볼륨 슬라이더 + 테스트
+5. **ROI 위치 조정** (테스트용): Y좌표/높이/너비 수동 입력 + 적용 버튼
+6. **화면 공유 및 탐지**: 공유/탐지 시작·중지 버튼 + 실행 상태 + 매칭 점수
+7. **버프 영역 프리뷰**: ROI 영역만 실시간 Canvas 표시
+8. **푸터**: 고지문
 
-## 9. UI / UX
+### 프리뷰
+- `<video>` 숨김 (캡처 전용)
+- `<canvas>` 에 ROI 영역만 실시간 `drawImage` (requestAnimationFrame)
+- 사용자가 버프 아이콘이 프리뷰에 보이는지 확인 가능
 
-### 레이아웃 (실제 구현)
-
-```
-┌─────────────────────────────────────────┐
-│ 🔔 홀리심볼 버프 타이머                  │
-├─────────────────────────────────────────┤
-│ [🖥️ 화면 공유 시작] [⏹️ 공유 중지]        │
-│ [🔍 탐지 시작]     [⏸️ 탐지 중지]         │
-│ [🔄 갱신 (Space)]  [👁️ 영역 표시]         │
-│                                         │
-│ 알림 시간(초 전): [ 5 ] (1~60)           │
-├─────────────────────────────────────────┤
-│ 공유 OFF | 탐지 IDLE | 점수 — | 잔여 --:-- │
-│ ████████████░░░░░ (progress)            │
-├─────────────────────────────────────────┤
-│ 📺 프리뷰                                │
-│ [video + overlayCanvas]                 │
-├─────────────────────────────────────────┤
-│ ▶ 🎬 녹화 도구 (디버깅용, details)        │
-├─────────────────────────────────────────┤
-│ [📜 정책 보기] · 측정·알림 전용, 자동화 아님│
-└─────────────────────────────────────────┘
-```
-
-### 주요 DOM 요소
-| ID | 역할 |
-|---|---|
-| `#startShareBtn` / `#stopShareBtn` | 화면 공유 제어 |
-| `#startDetectBtn` / `#stopDetectBtn` | 탐지 시작/정지 |
-| `#refreshBtn` | 수동 갱신 (자동 감지 실패 시 백업, 단축키 Space) |
-| `#toggleOverlayBtn` | 영역 시각화 ON/OFF |
-| `#alertSeconds` | 알림 시간(초 전) 입력 1~60 |
-| `#shareStatus` / `#detectStatus` | 상태 표시 |
-| `#matchScore` / `#remainingTime` | 매칭 점수·잔여시간 |
-| `#progressBar` | 잔여시간 바 (high/mid/low 단계 색상) |
-| `#preview` / `#overlayCanvas` | 프리뷰 비디오 + 오버레이 캔버스 |
-| `#flashOverlay` | 전체 화면 플래시 레이어 |
-| `#analysisCanvas` | 숨김, 프레임 분석용 |
-
-### Overlay 모듈 (신규)
-`<video>` 위에 `<canvas>`를 겹쳐 렌더. `object-fit: contain` 매핑 보정 포함:
-- **초록 실선 박스** — 감지된 홀리심볼 아이콘 (`#10b981`)
-- **노란 점선 박스** — ROI 탐색 영역 + 반투명 fill (`rgba(250,204,21,...)`)
-- 라벨 텍스트로 "홀리심볼" / "ROI (탐색 영역)" 표시
-- `requestAnimationFrame`으로 그리기 스케줄
-
-### "대기 중..." 표시
-OCR 동기화 전에는 잔여시간 란에 `대기 중...`, 프로그레스 바는 100%로 표시. OCR이 유효 숫자를 잡으면 실제 값으로 전환.
-
-### 알림 방식 (동시 발동, `Notifier.alertExpiring`)
-1. **Web Audio**: 880Hz 비프 × 3회 (200ms, 80ms gap)
-2. **Notification API**: "홀리심볼 만료 임박 — N초 남음 · 갱신하세요"
-3. **화면 플래시**: `#flashOverlay` 빨간색 점멸 3회
-4. **진동**: 지원 시 `navigator.vibrate([200,100,200])`
+### 설정 저장
+LocalStorage에 자동 저장/복원:
+- 선택된 템플릿 (src, name, ROI 값)
+- 사운드 종류 + 볼륨
 
 ---
 
-## 10. 파라미터 상수 (현재값)
+## 9. 파라미터 상수
 
-### `timer.js` CONFIG
+### detector.js
 ```js
-SCAN_INTERVAL_MS: 1000
-CONSECUTIVE_DETECT_REQUIRED: 3
-CONSECUTIVE_MISS_RESCAN: 10
-ALERT_THRESHOLD_SECONDS: 5        // 사용자 설정 1~60
-BUFF_DURATION_SECONDS: 120
-
-REFRESH_SCORE_DELTA: 0.06
-REFRESH_BRIGHTNESS_DELTA: 10
-REFRESH_BRIGHTNESS_RATIO: 0.92
-REFRESH_MIN_ELAPSED_SEC: 3
-REFRESH_COOLDOWN_MS: 3000
-REFRESH_DEBUG: true
-
-SCORE_BUFFER_SIZE: 3
-BRIGHTNESS_BUFFER_SIZE: 3
-
-OCR_MIN_CONFIDENCE: 30            // Tesseract.js는 낮게 반환하는 경향
-OCR_SYNC_CONFIRM: 2               // 일반 구간 2회 단조감소 확인
-OCR_SYNC_FAST_MIN: 50             // ≥50은 1회로 즉시 sync
-OCR_MAX_DECREMENT: 10             // OCR 지연 흡수
-OCR_REFRESH_JUMP_MIN: 10          // +10초 이상 → 갱신 간주
+MATCH_THRESHOLD: 0.978       // 매칭 임계값
 ```
 
-### `detector.js` CONFIG
+### timer.js
 ```js
-MATCH_THRESHOLD: 0.45
-INIT_SCAN_SCALES: [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5,
-                   2.75, 3.0, 3.25, 3.5, 3.75, 4.0, 4.25, 4.5]
-ROI_WIDTH_RATIO: 0.35
-ROI_RIGHT_PAD_PX: 10
-ROI_PAD_Y_PX: 20
-TEMPLATE_PATH: "image/reference/icon.png"
+DETECTION_INTERVAL_MS: 500   // 감지 주기
+ALERT_COOLDOWN_MS: 3000      // 알림 후 쿨다운
 ```
-
-### `ocr.js` (Tesseract 파라미터)
-```
-tessedit_pageseg_mode   = PSM.SINGLE_WORD (8)
-classify_bln_numeric_mode = 1
-tessedit_char_whitelist = "0123456789"
-```
-
-### `storage.js`
-- 키: `holy_buff_timer`
-- 필드: `{ roi, alertSeconds }`
 
 ---
 
-## 11. 개발 단계
+## 10. 개발 단계
 
-- **Phase 1 (완료)**: 화면 녹화 — getDisplayMedia + MediaRecorder, 테스트 영상 수집
-- **Phase 2 (완료)**: 탐지 엔진 — OpenCV.js 템플릿 매칭 + ROI 우측 고정 + 밝기 측정
-- **Phase 3 (완료)**: OCR 기반 카운트다운 — HSV 전처리 파이프라인 + 2단계 동기화 로직
-- **Phase 4 (완료)**: 알림·갱신 감지·UI 개선 — 3중 갱신 지표, Overlay 시각화, 알림시간 설정, 수동 갱신
-- **Phase 5 (완료)**: 배포 — GitHub Pages (https://top6421.github.io/holy-buff-timer/)
-- **Phase 6 (현재)**: 안정화·튜닝 — 실전 케이스 수집, 임계값 최적화
-- **Phase 7 (예정)**: 정식 공개 전 정책 문의 + 랜딩 페이지 정비
+| Phase | 내용 | 상태 |
+|---|---|---|
+| 1 | 화면 녹화 모듈 (디버깅용) | ✅ 완료 → 제거됨 |
+| 2 | 자동 스케일 탐지 + OCR 카운트다운 | ✅ 완료 → 폐기 |
+| 3 | **템플릿 이미지 매칭 방식 전환** | ✅ 완료 (현재) |
+| 4 | 사운드 설정 (4종 + 볼륨) | ✅ 완료 |
+| 5 | 맥북 레티나 해상도 지원 | ✅ 완료 |
+| 6 | GitHub Pages 배포 | ✅ 완료 |
+| 7 | 추가 해상도/초수 템플릿 확장 | 진행 중 |
+| 8 | 정식 공개 (랜딩 페이지, 정책 문의) | 예정 |
 
 ---
 
-## 12. 테스트 자산
+## 11. 폐기된 기능 (참고)
 
-### 녹화 영상 (`recording/` — git ignore, 로컬 보관)
-| 파일 | 용도 |
+초기 버전에서 시도했으나 **템플릿 매칭 방식이 더 단순·정확**하여 폐기:
+
+- **OCR 기반 카운트다운**: Tesseract.js로 아이콘 숫자 읽기 → 인식률 불안정, 복잡한 전처리 필요
+- **밝기 기반 갱신 감지**: 아이콘 회색 오버레이 진행도 측정 → 불필요 (템플릿 방식은 갱신 감지 자체가 불필요)
+- **자동 스케일 탐지**: 17단계 스케일 스캔 → 불필요 (해상도별 고정 템플릿)
+- **PIP(Picture-in-Picture) 창**: Document PIP API → 삭제 (게임 전체화면에서 실용성 부족)
+- **수동 갱신 버튼**: Space 키 단축키 → 삭제 (템플릿 방식에서 불필요)
+
+---
+
+## 12. 미해결 / 향후 작업
+
+- [ ] 추가 해상도 템플릿 (2560×1440 등)
+- [ ] 맥북 추가 초수 템플릿 (7, 10, 15, 20, 30초)
+- [ ] ROI 조정 UI 정식 통합 또는 제거 (현재 테스트용)
+- [ ] 정식 공개 전 메이플랜드 고객센터 문의
+- [ ] 랜딩 페이지 + FAQ + 이용약관
+- [ ] 커스텀 도메인
+
+---
+
+## 13. 변경 이력
+
+| 날짜 | 내용 |
 |---|---|
-| `holysimbol_only_1.webm` | 단일 버프 풀 사이클 |
-| `holysimbol_only2.webm` | 단일 버프 풀 사이클 (2번째 세션) |
-| `multiple_buff.webm` | 여러 버프 혼재 |
-| `buff-capture-2026-04-14T18-11-35.webm` | 실전 세션 |
-| `buff-capture-2026-04-14T18-57-18.webm` | 실전 세션 |
-
-### 이미지
-| 경로 | 용도 |
-|---|---|
-| `image/reference/icon.png` | 32×32 RGBA 메인 템플릿 |
-| `image/labeled/` | 15개 라벨 이미지 (OCR/시각 검증) |
-
----
-
-## 13. 미해결 / 향후 검증
-
-- [ ] **해상도 적응** — 비레티나 2042×1148 확인 완료, **1920×1080 / 2560×1440 추가 검증 필요**
-- [ ] **OCR 장시간 안정성** — 세션 30분 이상 연속 동작 시 메모리/정확도 추이
-- [ ] **배경 복잡도** — 전투 이펙트 많은 상황에서 매칭 안정성 재검증
-- [ ] **다른 버프 템플릿 확장성** — 블레스, 샤프아이즈 등 동시 모니터링 구조 설계
-- [ ] **정책 공식 문의** — 메이플랜드 고객센터 답변 확보 (Phase 7)
-
----
-
-## 14. 변경 이력
-
-- **2026-04-14**: OCR 카운트다운 파이프라인·3중 갱신 감지·Overlay 모듈·ROI 우측 끝 고정 전략 반영. GitHub Pages 배포.
-- **2026-04-15** (초안): 초기 스펙 작성 (Phase 1~2 기준).
+| 2026-04-14 | 프로젝트 시작, 화면 녹화 모듈, OCR 탐지 엔진 |
+| 2026-04-15 | OCR 기반 카운트다운, HSV 전처리, GitHub Pages 배포 |
+| 2026-04-18 | **템플릿 매칭 방식으로 전면 전환** (kimdanjin 참조) |
+| 2026-04-18 | PIP 제거, 사운드 설정 추가, 시간 버튼 UI |
+| 2026-04-18 | 맥북 레티나 해상도 지원, ROI 테스트 UI |
+| 2026-04-19 | 매칭 점수 실시간 표시, 문서 최신화 |
